@@ -5,9 +5,11 @@ using System.IO;
 using System.Net.Http;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace NexChat.Services
@@ -222,11 +224,16 @@ namespace NexChat.Services
             Processlocal.Start();
             _processList.Add(ChatId, Processlocal);
 
-            string URLTunnel = await GetURLTunnel(Processlocal);
-            if (string.IsNullOrEmpty(URLTunnel)) return new OpenTunnelConnection(false, "Could not retrieve tunnel URL.");
+            // Timeout para evitar bloqueos
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            string? url = await GetUrlTunnelAsync(Processlocal, cts.Token);
 
-            openTunnelConnection = new OpenTunnelConnection(true);
-            openTunnelConnection.TunnelUrl = URLTunnel;
+            if (string.IsNullOrWhiteSpace(url))
+                return new OpenTunnelConnection(false, "Could not retrieve tunnel URL.");
+
+
+            openTunnelConnection.Success = true;
+            openTunnelConnection.TunnelUrl = url;
             return openTunnelConnection;
         }
 
@@ -252,23 +259,39 @@ namespace NexChat.Services
             return openTunnelConnection;
         }
 
-        private async Task<string> GetURLTunnel(Process process)
+        private async Task<string?> GetUrlTunnelAsync(Process proc, CancellationToken token)
         {
-            while (!process.StandardOutput.EndOfStream)
+            try
             {
-                var line = process.StandardOutput.ReadLine();
+                var stream = proc.StandardError.BaseStream;
+                var buffer = new byte[2048];
+                var sb = new StringBuilder();
 
-                if (line != null && line.Contains("trycloudflare.com"))
+                while (!token.IsCancellationRequested)
                 {
-                    var match = Regex.Match(line, @"https://[a-zA-Z0-9\-]+\.trycloudflare\.com");
-                    if (match.Success)
+                    int read = await stream.ReadAsync(buffer, 0, buffer.Length, token);
+
+                    if (read > 0)
                     {
-                        return match.Groups[1].Value.Trim();
+                        string chunk = Encoding.UTF8.GetString(buffer, 0, read);
+                        sb.Append(chunk);
+
+                        var match = Regex.Match(sb.ToString(), @"https://[a-zA-Z0-9\-]+\.trycloudflare\.com");
+                        if (match.Success)
+                            return match.Value;
+                    }
+                    else
+                    {
+                        await Task.Delay(50, token);
                     }
                 }
-            }
 
-            return string.Empty;
+                return null;
+            }
+            catch (TaskCanceledException)
+            {
+                return null;
+            }
         }
 
         private async Task<GitHubRelease?> GetLatestReleaseInfo()

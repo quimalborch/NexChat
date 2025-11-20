@@ -38,8 +38,8 @@ namespace NexChat
         {
             InitializeComponent();
             ChatItems = new ObservableCollection<Chat>();
-            _chatService = CreateChatService();
             _cloudflaredService = new CloudflaredService();
+            _chatService = CreateChatService();
             _chatService.ChatListUpdated += _chatService_ChatListUpdated;
             // Invocar manualmente la actualización después de suscribirse
             _chatService.UpdateHandlerChats();
@@ -185,7 +185,7 @@ namespace NexChat
         }
 
         private ChatService CreateChatService(){
-            return new ChatService();
+            return new ChatService(_cloudflaredService);
         }
 
         private void ChatListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -460,21 +460,24 @@ namespace NexChat
             }
         }
 
-        private void PlayChat_Click(object sender, RoutedEventArgs e)
+        private async void PlayChat_Click(object sender, RoutedEventArgs e)
         {
             var menuItem = sender as MenuFlyoutItem;
             if (menuItem?.Tag is string chatId)
             {
-                _chatService.StartWebServer(chatId);
+                // Por defecto, no habilitar túnel. Puedes cambiarlo a true si deseas
+                // habilitar túnel automáticamente cuando se inicia el servidor
+                bool enableTunnel = true;
+                await _chatService.StartWebServer(chatId, enableTunnel);
             }
         }
 
-        private void StopChat_Click(object sender, RoutedEventArgs e)
+        private async void StopChat_Click(object sender, RoutedEventArgs e)
         {
             var menuItem = sender as MenuFlyoutItem;
             if (menuItem?.Tag is string chatId)
             {
-                _chatService.StopWebServer(chatId);
+                await _chatService.StopWebServer(chatId);
             }
         }
 

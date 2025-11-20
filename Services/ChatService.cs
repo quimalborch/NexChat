@@ -14,9 +14,11 @@ namespace NexChat.Services
         public List<Chat> chats = new List<Chat>();
         public event EventHandler<List<Chat>> ChatListUpdated;
         private Dictionary<string, WebServerService> _webServers = new Dictionary<string, WebServerService>();
+        private CloudflaredService _cloudflaredService;
         
-        public ChatService() 
+        public ChatService(CloudflaredService cloudflaredService) 
         {
+            _cloudflaredService = cloudflaredService;
             LoadChats();
         }
 
@@ -134,15 +136,15 @@ namespace NexChat.Services
             SaveChats();
         }
 
-        public bool StartWebServer(string chatId)
+        public async Task<bool> StartWebServer(string chatId, bool enableTunnel = false)
         {
             Chat? chat = GetChatById(chatId);
             if (chat is null || chat.IsRunning) 
                 return false;
             
-            // Crear y arrancar el servidor web
-            var webServer = new WebServerService();
-            if (webServer.Start())
+            // Crear y arrancar el servidor web con soporte de túnel
+            var webServer = new WebServerService(_cloudflaredService);
+            if (await webServer.Start(chatId, enableTunnel))
             {
                 _webServers[chatId] = webServer;
                 chat.IsRunning = true;
@@ -150,6 +152,11 @@ namespace NexChat.Services
                 SaveChats();
                 
                 Console.WriteLine($"Web server started for chat '{chat.Name}' on port {webServer.Port}");
+                
+                if (enableTunnel && webServer.IsTunnelActive)
+                {
+                    Console.WriteLine($"Cloudflare tunnel active: {webServer.TunnelUrl}");
+                }
                 
                 // Probar la conexión en segundo plano
                 Task.Run(async () =>
@@ -166,13 +173,13 @@ namespace NexChat.Services
             return false;
         }
 
-        public bool StopWebServer(string chatId)
+        public async Task<bool> StopWebServer(string chatId)
         {
             Chat? chat = GetChatById(chatId);
             if (chat is null || !chat.IsRunning) 
                 return false;
             
-            // Detener el servidor web
+            // Detener el servidor web (y el túnel si está activo)
             if (_webServers.TryGetValue(chatId, out var webServer))
             {
                 webServer.Stop();
@@ -185,6 +192,46 @@ namespace NexChat.Services
             
             Console.WriteLine($"Web server stopped for chat '{chat.Name}'");
             return true;
+        }
+
+        public async Task<bool> OpenTunnel(string chatId)
+        {
+            if (!_webServers.TryGetValue(chatId, out var webServer))
+            {
+                Console.WriteLine($"No web server running for chat {chatId}");
+                return false;
+            }
+
+            return await webServer.OpenTunnel();
+        }
+
+        public async Task<bool> CloseTunnel(string chatId)
+        {
+            if (!_webServers.TryGetValue(chatId, out var webServer))
+            {
+                Console.WriteLine($"No web server running for chat {chatId}");
+                return false;
+            }
+
+            return await webServer.CloseTunnel();
+        }
+
+        public string? GetTunnelUrl(string chatId)
+        {
+            if (_webServers.TryGetValue(chatId, out var webServer))
+            {
+                return webServer.TunnelUrl;
+            }
+            return null;
+        }
+
+        public bool IsTunnelActive(string chatId)
+        {
+            if (_webServers.TryGetValue(chatId, out var webServer))
+            {
+                return webServer.IsTunnelActive;
+            }
+            return false;
         }
     }
 }

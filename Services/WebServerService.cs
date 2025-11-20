@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
@@ -13,16 +13,28 @@ namespace NexChat.Services
         private HttpListener? _listener;
         private CancellationTokenSource? _cancellationTokenSource;
         private Task? _listenerTask;
+        private CloudflaredService? _cloudflaredService;
+        private string? _chatId;
+        
         public int Port { get; private set; }
         public bool IsRunning => _listener?.IsListening ?? false;
+        public string? TunnelUrl { get; private set; }
+        public bool IsTunnelActive { get; private set; }
 
-        public bool Start()
+        public WebServerService(CloudflaredService? cloudflaredService = null)
+        {
+            _cloudflaredService = cloudflaredService;
+        }
+
+        public async Task<bool> Start(string? chatId = null, bool enableTunnel = false)
         {
             if (IsRunning)
             {
                 Console.WriteLine("Server is already running");
                 return false;
             }
+
+            _chatId = chatId;
 
             // Intentar varios puertos si es necesario
             int maxAttempts = 5;
@@ -49,26 +61,32 @@ namespace NexChat.Services
                     // Iniciar el listener
                     _listener.Start();
                     
-                    Console.WriteLine($"? HttpListener started successfully on port {Port}");
-                    Console.WriteLine($"? IsListening: {_listener.IsListening}");
-                    Console.WriteLine($"? Server URL: http://localhost:{Port}/");
-                    Console.WriteLine($"? Accepts connections from: ANY hostname (remote-ready)");
+                    Console.WriteLine($"✓ HttpListener started successfully on port {Port}");
+                    Console.WriteLine($"✓ IsListening: {_listener.IsListening}");
+                    Console.WriteLine($"✓ Server URL: http://localhost:{Port}/");
+                    Console.WriteLine($"✓ Accepts connections from: ANY hostname (remote-ready)");
                     
                     // Iniciar tarea para escuchar peticiones
                     _listenerTask = Task.Run(() => HandleIncomingConnections(_cancellationTokenSource.Token));
                     
-                    Console.WriteLine("? Background task started for handling connections");
+                    Console.WriteLine("✓ Background task started for handling connections");
+                    
+                    // Si se solicita túnel y tenemos el servicio disponible, abrirlo
+                    if (enableTunnel && _cloudflaredService != null && !string.IsNullOrEmpty(_chatId))
+                    {
+                        await OpenTunnel();
+                    }
                     
                     return true;
                 }
                 catch (HttpListenerException hlex)
                 {
-                    Console.WriteLine($"? HttpListenerException on port {Port}: {hlex.Message} (Error Code: {hlex.ErrorCode})");
+                    Console.WriteLine($"✗ HttpListenerException on port {Port}: {hlex.Message} (Error Code: {hlex.ErrorCode})");
                     
                     // Si el error es de permisos (Error Code 5), intentar con localhost
                     if (hlex.ErrorCode == 5)
                     {
-                        Console.WriteLine($"? Access Denied - Trying with localhost only...");
+                        Console.WriteLine($"✗ Access Denied - Trying with localhost only...");
                         try
                         {
                             _listener = new HttpListener();
@@ -77,14 +95,21 @@ namespace NexChat.Services
                             _cancellationTokenSource = new CancellationTokenSource();
                             _listener.Start();
                             
-                            Console.WriteLine($"? Server started with localhost only (run as Admin for remote access)");
+                            Console.WriteLine($"✓ Server started with localhost only (run as Admin for remote access)");
                             
                             _listenerTask = Task.Run(() => HandleIncomingConnections(_cancellationTokenSource.Token));
+                            
+                            // Intentar abrir túnel si fue solicitado
+                            if (enableTunnel && _cloudflaredService != null && !string.IsNullOrEmpty(_chatId))
+                            {
+                                await OpenTunnel();
+                            }
+                            
                             return true;
                         }
                         catch
                         {
-                            // Si tambi�n falla, continuar con el siguiente intento
+                            // Si también falla, continuar con el siguiente intento
                         }
                     }
                     
@@ -98,7 +123,7 @@ namespace NexChat.Services
                     if (attempt == maxAttempts - 1)
                     {
                         Console.WriteLine($"Failed to start server after {maxAttempts} attempts");
-                        Console.WriteLine($"?? TIP: Run Visual Studio as Administrator to accept remote connections");
+                        Console.WriteLine($"⚠️ TIP: Run Visual Studio as Administrator to accept remote connections");
                         Stop();
                         return false;
                     }
@@ -108,7 +133,7 @@ namespace NexChat.Services
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"? Error starting web server: {ex.Message}");
+                    Console.WriteLine($"✗ Error starting web server: {ex.Message}");
                     Console.WriteLine($"Exception Type: {ex.GetType().Name}");
                     
                     if (_listener != null)
@@ -130,7 +155,103 @@ namespace NexChat.Services
             return false;
         }
 
-        public void Stop()
+        public async Task<bool> OpenTunnel()
+        {
+            if (_cloudflaredService == null)
+            {
+                Console.WriteLine("✗ CloudflaredService not available");
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(_chatId))
+            {
+                Console.WriteLine("✗ ChatId not set, cannot open tunnel");
+                return false;
+            }
+
+            if (!IsRunning)
+            {
+                Console.WriteLine("✗ Server must be running before opening tunnel");
+                return false;
+            }
+
+            if (IsTunnelActive)
+            {
+                Console.WriteLine("⚠️ Tunnel is already active");
+                return true;
+            }
+
+            try
+            {
+                Console.WriteLine($"Opening Cloudflare tunnel for chat {_chatId} on port {Port}...");
+                var result = await _cloudflaredService.TryOpenTunnel(_chatId, Port);
+                
+                if (result.Success)
+                {
+                    TunnelUrl = result.TunnelUrl;
+                    IsTunnelActive = true;
+                    Console.WriteLine($"✓ Tunnel opened successfully: {TunnelUrl}");
+                    return true;
+                }
+                else
+                {
+                    Console.WriteLine($"✗ Failed to open tunnel: {result.ErrorMessage}");
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"✗ Error opening tunnel: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<bool> CloseTunnel()
+        {
+            if (_cloudflaredService == null)
+            {
+                Console.WriteLine("✗ CloudflaredService not available");
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(_chatId))
+            {
+                Console.WriteLine("✗ ChatId not set");
+                return false;
+            }
+
+            if (!IsTunnelActive)
+            {
+                Console.WriteLine("⚠️ No active tunnel to close");
+                return true;
+            }
+
+            try
+            {
+                Console.WriteLine($"Closing Cloudflare tunnel for chat {_chatId}...");
+                var result = await _cloudflaredService.TryCloseTunnel(_chatId);
+                
+                if (result.Success)
+                {
+                    TunnelUrl = null;
+                    IsTunnelActive = false;
+                    Console.WriteLine("✓ Tunnel closed successfully");
+                    return true;
+                }
+                else
+                {
+                    Console.WriteLine($"✗ Failed to close tunnel: {result.ErrorMessage}");
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"✗ Error closing tunnel: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async void Stop()
         {
             if (_listener == null)
                 return;
@@ -139,6 +260,12 @@ namespace NexChat.Services
 
             try
             {
+                // Cerrar túnel si está activo
+                if (IsTunnelActive)
+                {
+                    await CloseTunnel();
+                }
+
                 _cancellationTokenSource?.Cancel();
                 _listener?.Stop();
                 _listener?.Close();
@@ -156,6 +283,9 @@ namespace NexChat.Services
                 _cancellationTokenSource?.Dispose();
                 _cancellationTokenSource = null;
                 _listenerTask = null;
+                TunnelUrl = null;
+                IsTunnelActive = false;
+                _chatId = null;
             }
         }
 
@@ -174,7 +304,7 @@ namespace NexChat.Services
                     {
                         Console.WriteLine($"? Request received: {context.Request.HttpMethod} {context.Request.Url}");
                         
-                        // Procesar la petici�n sin esperar (fire and forget para no bloquear)
+                        // Procesar la petición sin esperar (fire and forget para no bloquear)
                         _ = Task.Run(async () => 
                         {
                             try
@@ -200,7 +330,7 @@ namespace NexChat.Services
                 catch (OperationCanceledException)
                 {
                     Console.WriteLine("Operation cancelled in HandleIncomingConnections");
-                    // Cancelaci�n solicitada
+                    // Cancelación solicitada
                     break;
                 }
                 catch (Exception ex)
@@ -220,7 +350,7 @@ namespace NexChat.Services
 
             try
             {
-                // Loggear informaci�n detallada de la petici�n
+                // Loggear información detallada de la petición
                 Console.WriteLine($"Processing request: {request.HttpMethod} {request.Url?.AbsolutePath}");
                 Console.WriteLine($"  Host: {request.Headers["Host"]}");
                 Console.WriteLine($"  Remote IP: {request.RemoteEndPoint}");
@@ -232,7 +362,7 @@ namespace NexChat.Services
                 switch (request.Url?.AbsolutePath.ToLower())
                 {
                     case "/":
-                        responseString = "NexChat WebServer is running!";
+                        responseString = $"NexChat WebServer is running! Call Id: {Guid.NewGuid().ToString()}";
                         response.StatusCode = 200;
                         Console.WriteLine("? Responding to root path");
                         break;
@@ -298,7 +428,7 @@ namespace NexChat.Services
         }
 
         /// <summary>
-        /// Prueba si el servidor responde correctamente haciendo una petici�n HTTP
+        /// Prueba si el servidor responde correctamente haciendo una petición HTTP
         /// </summary>
         public async Task<bool> TestConnection()
         {
