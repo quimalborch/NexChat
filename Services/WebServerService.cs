@@ -37,11 +37,12 @@ namespace NexChat.Services
                     
                     _listener = new HttpListener();
                     
-                    // Solo usar localhost con trailing slash
-                    string prefix = $"http://localhost:{Port}/";
+                    // Usar el wildcard '+' para aceptar conexiones desde cualquier hostname
+                    // Esto permite que Cloudflare Tunnel y otros proxies funcionen correctamente
+                    string prefix = $"http://127.0.0.1:{Port}/";
                     _listener.Prefixes.Add(prefix);
-                    
-                    Console.WriteLine($"Prefix added: {prefix}");
+
+                    Console.WriteLine($"Prefix added: {prefix} (accepts any hostname)");
                     
                     _cancellationTokenSource = new CancellationTokenSource();
                     
@@ -51,6 +52,7 @@ namespace NexChat.Services
                     Console.WriteLine($"? HttpListener started successfully on port {Port}");
                     Console.WriteLine($"? IsListening: {_listener.IsListening}");
                     Console.WriteLine($"? Server URL: http://localhost:{Port}/");
+                    Console.WriteLine($"? Accepts connections from: ANY hostname (remote-ready)");
                     
                     // Iniciar tarea para escuchar peticiones
                     _listenerTask = Task.Run(() => HandleIncomingConnections(_cancellationTokenSource.Token));
@@ -63,6 +65,29 @@ namespace NexChat.Services
                 {
                     Console.WriteLine($"? HttpListenerException on port {Port}: {hlex.Message} (Error Code: {hlex.ErrorCode})");
                     
+                    // Si el error es de permisos (Error Code 5), intentar con localhost
+                    if (hlex.ErrorCode == 5)
+                    {
+                        Console.WriteLine($"? Access Denied - Trying with localhost only...");
+                        try
+                        {
+                            _listener = new HttpListener();
+                            _listener.Prefixes.Add($"http://localhost:{Port}/");
+                            _listener.Prefixes.Add($"http://127.0.0.1:{Port}/");
+                            _cancellationTokenSource = new CancellationTokenSource();
+                            _listener.Start();
+                            
+                            Console.WriteLine($"? Server started with localhost only (run as Admin for remote access)");
+                            
+                            _listenerTask = Task.Run(() => HandleIncomingConnections(_cancellationTokenSource.Token));
+                            return true;
+                        }
+                        catch
+                        {
+                            // Si también falla, continuar con el siguiente intento
+                        }
+                    }
+                    
                     // Limpiar antes de intentar de nuevo
                     if (_listener != null)
                     {
@@ -73,6 +98,7 @@ namespace NexChat.Services
                     if (attempt == maxAttempts - 1)
                     {
                         Console.WriteLine($"Failed to start server after {maxAttempts} attempts");
+                        Console.WriteLine($"?? TIP: Run Visual Studio as Administrator to accept remote connections");
                         Stop();
                         return false;
                     }
@@ -194,7 +220,11 @@ namespace NexChat.Services
 
             try
             {
+                // Loggear información detallada de la petición
                 Console.WriteLine($"Processing request: {request.HttpMethod} {request.Url?.AbsolutePath}");
+                Console.WriteLine($"  Host: {request.Headers["Host"]}");
+                Console.WriteLine($"  Remote IP: {request.RemoteEndPoint}");
+                Console.WriteLine($"  User-Agent: {request.UserAgent}");
 
                 string responseString;
                 
@@ -225,6 +255,7 @@ namespace NexChat.Services
                 response.ContentEncoding = Encoding.UTF8;
                 response.AddHeader("Access-Control-Allow-Origin", "*");
                 response.AddHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+                response.AddHeader("Server", "NexChat/1.0");
                 
                 byte[] buffer = Encoding.UTF8.GetBytes(responseString);
                 response.ContentLength64 = buffer.Length;
