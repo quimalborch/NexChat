@@ -15,6 +15,7 @@ using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
+using Microsoft.UI;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -28,6 +29,8 @@ namespace NexChat
     {
         private ChatService _chatService;
         public ObservableCollection<Chat> ChatItems { get; set; }
+        private Chat _selectedChat;
+        private string _currentUserId = "USER_LOCAL"; // ID del usuario actual
 
         public MainWindow()
         {
@@ -52,14 +55,195 @@ namespace NexChat
             return new ChatService();
         }
 
-        private void ChatListView_ItemClick(object sender, ItemClickEventArgs e)
+        private void ChatListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            var selectedChat = e.ClickedItem as Chat;
+            var listView = sender as ListView;
+            var selectedChat = listView?.SelectedItem as Chat;
             if (selectedChat != null)
             {
-                // Aquí puedes hacer algo cuando se selecciona un chat
-                // Por ejemplo, navegar a una página de chat o cargar los mensajes
+                _selectedChat = selectedChat;
+                LoadChatView(selectedChat);
             }
+        }
+
+        private void LoadChatView(Chat chat)
+        {
+            var content = this.Content as FrameworkElement;
+            if (content == null) return;
+
+            // Obtener referencias a los controles usando FindName
+            var chatViewPanel = content.FindName("ChatViewPanel") as Grid;
+            var emptyChatPanel = content.FindName("EmptyChatPanel") as Grid;
+            var chatHeaderName = content.FindName("ChatHeaderName") as TextBlock;
+            var chatHeaderInfo = content.FindName("ChatHeaderInfo") as TextBlock;
+
+            if (chatViewPanel == null || emptyChatPanel == null || chatHeaderName == null || chatHeaderInfo == null)
+                return;
+
+            // Mostrar panel de chat y ocultar empty state
+            chatViewPanel.Visibility = Visibility.Visible;
+            emptyChatPanel.Visibility = Visibility.Collapsed;
+
+            // Actualizar header del chat
+            chatHeaderName.Text = chat.Name;
+            chatHeaderInfo.Text = $"Code: {chat.CodeInvitation ?? "Sin código"}";
+
+            // Cargar mensajes
+            LoadMessages(chat.Messages);
+
+            // Scroll al final
+            ScrollToBottom();
+        }
+
+        private void LoadMessages(List<Message> messages)
+        {
+            var content = this.Content as FrameworkElement;
+            if (content == null) return;
+
+            var messagesPanel = content.FindName("MessagesPanel") as StackPanel;
+            if (messagesPanel == null) return;
+
+            messagesPanel.Children.Clear();
+            
+            foreach (var message in messages)
+            {
+                AddMessageToUI(message);
+            }
+        }
+
+        private void AddMessageToUI(Message message)
+        {
+            var content = this.Content as FrameworkElement;
+            if (content == null) return;
+
+            var messagesPanel = content.FindName("MessagesPanel") as StackPanel;
+            if (messagesPanel == null) return;
+
+            bool isMyMessage = message.Sender.Id == _currentUserId;
+
+            // Grid contenedor para alineación
+            var messageGrid = new Grid
+            {
+                Margin = new Thickness(0, 5, 0, 5),
+                HorizontalAlignment = isMyMessage ? HorizontalAlignment.Right : HorizontalAlignment.Left
+            };
+
+            // Border para la burbuja del mensaje
+            var bubble = new Border
+            {
+                CornerRadius = new CornerRadius(12),
+                Padding = new Thickness(12, 8, 12, 8),
+                MaxWidth = 600,
+                Background = isMyMessage 
+                    ? (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"]
+                    : (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"]
+            };
+
+            // StackPanel para contenido del mensaje
+            var contentStack = new StackPanel
+            {
+                Spacing = 4
+            };
+
+            // Nombre del remitente (solo para mensajes recibidos)
+            if (!isMyMessage && !string.IsNullOrEmpty(message.Sender.Name))
+            {
+                var senderName = new TextBlock
+                {
+                    Text = message.Sender.Name,
+                    FontSize = 12,
+                    FontWeight = new Windows.UI.Text.FontWeight { Weight = 600 },
+                    Foreground = (Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"]
+                };
+                contentStack.Children.Add(senderName);
+            }
+
+            // Contenido del mensaje
+            var contentText = new TextBlock
+            {
+                Text = message.Content,
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 14
+            };
+            contentStack.Children.Add(contentText);
+
+            // Timestamp
+            var timestamp = new TextBlock
+            {
+                Text = message.Timestamp.ToLocalTime().ToString("HH:mm"),
+                FontSize = 11,
+                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            contentStack.Children.Add(timestamp);
+
+            bubble.Child = contentStack;
+            messageGrid.Children.Add(bubble);
+            messagesPanel.Children.Add(messageGrid);
+        }
+
+        private void MessageInputBox_KeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            if (e.Key == Windows.System.VirtualKey.Enter)
+            {
+                SendMessage();
+                e.Handled = true;
+            }
+        }
+
+        private void SendButton_Click(object sender, RoutedEventArgs e)
+        {
+            SendMessage();
+        }
+
+        private void SendMessage()
+        {
+            var content = this.Content as FrameworkElement;
+            if (content == null) return;
+
+            var messageInputBox = content.FindName("MessageInputBox") as TextBox;
+            if (messageInputBox == null) return;
+
+            if (_selectedChat == null || string.IsNullOrWhiteSpace(messageInputBox.Text))
+                return;
+
+            string messageContent = messageInputBox.Text;
+            
+            //TODO: Implementar lógica de envío de mensaje a través del ChatService a la red
+            var sender = new Sender(_currentUserId) { Name = "Yo" };
+            var message = new Message(_selectedChat, sender, messageContent);
+            
+            // Agregar mensaje al chat usando el servicio
+            _chatService.AddMessage(_selectedChat.Id, message);
+            
+            // Mostrar en la UI
+            AddMessageToUI(message);
+
+            // Limpiar input
+            messageInputBox.Text = string.Empty;
+
+            // Scroll al final
+            ScrollToBottom();
+        }
+
+        private void ScrollToBottom()
+        {
+            //TODO: Implementar scroll automático al final cuando se carguen o agreguen mensajes
+            var content = this.Content as FrameworkElement;
+            if (content == null) return;
+
+            var messagesScrollViewer = content.FindName("MessagesScrollViewer") as ScrollViewer;
+            if (messagesScrollViewer == null) return;
+
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                messagesScrollViewer.ChangeView(null, messagesScrollViewer.ScrollableHeight, null, false);
+            });
+        }
+
+        private void ChatListView_ItemClick(object sender, ItemClickEventArgs e)
+        {
+            // Ya no se usa, ahora usamos SelectionChanged
         }
 
         private async void BtnCrearNuevoChat_Click(object sender, RoutedEventArgs e)
@@ -141,6 +325,59 @@ namespace NexChat
                     _chatService.DeleteChat(chatId);
                 }
             }
+        }
+
+        private void PlayChat_Click(object sender, RoutedEventArgs e)
+        {
+            var menuItem = sender as MenuFlyoutItem;
+            if (menuItem?.Tag is string chatId)
+            {
+                _chatService.StartWebServer(chatId);
+            }
+        }
+
+        private void StopChat_Click(object sender, RoutedEventArgs e)
+        {
+            var menuItem = sender as MenuFlyoutItem;
+            if (menuItem?.Tag is string chatId)
+            {
+                _chatService.StopWebServer(chatId);
+            }
+        }
+
+        private void ChatContextMenu_Opening(object sender, object e)
+        {
+            var menuFlyout = sender as MenuFlyout;
+            if (menuFlyout == null) return;
+
+            // Obtener el chatId desde el contexto del menú
+            var grid = menuFlyout.Target as Grid;
+            if (grid == null) return;
+
+            var chatItem = grid.DataContext as Chat;
+            if (chatItem == null) return;
+
+            // Buscar los MenuFlyoutItems por nombre
+            MenuFlyoutItem playMenuItem = null;
+            MenuFlyoutItem stopMenuItem = null;
+
+            foreach (var item in menuFlyout.Items)
+            {
+                if (item is MenuFlyoutItem menuItem)
+                {
+                    if (menuItem.Text == "Play")
+                        playMenuItem = menuItem;
+                    else if (menuItem.Text == "Stop")
+                        stopMenuItem = menuItem;
+                }
+            }
+
+            // Mostrar/ocultar según el estado
+            if (playMenuItem != null)
+                playMenuItem.Visibility = chatItem.IsRunning ? Visibility.Collapsed : Visibility.Visible;
+            
+            if (stopMenuItem != null)
+                stopMenuItem.Visibility = chatItem.IsRunning ? Visibility.Visible : Visibility.Collapsed;
         }
     }
 }

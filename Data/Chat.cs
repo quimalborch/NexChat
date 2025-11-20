@@ -13,6 +13,13 @@ namespace NexChat.Data
         public string? CodeInvitation { get; set; }
         public List<Message> Messages { get; set; }
         public bool IsInvited { get; set; } = true;
+        public bool IsRunning { get; set; } = false;
+
+        public Chat() 
+        {
+            Messages = new List<Message>();
+        }
+
         public Chat(string Name) 
         {
             this.Name = Name;

@@ -11,6 +11,8 @@ namespace NexChat.Data
         public string Id { get; set; }
         public string? Name { get; set; }
 
+        public Sender() { }
+
         public Sender(string _Id) 
         {
             Id = _Id;
