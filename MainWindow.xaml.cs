@@ -28,18 +28,151 @@ namespace NexChat
     public sealed partial class MainWindow : Window
     {
         private ChatService _chatService;
+        private CloudflaredService _cloudflaredService;
         public ObservableCollection<Chat> ChatItems { get; set; }
         private Chat _selectedChat;
         private string _currentUserId = "USER_LOCAL"; // ID del usuario actual
+        private bool _cloudflareNeedsUpdate = false;
 
         public MainWindow()
         {
             InitializeComponent();
             ChatItems = new ObservableCollection<Chat>();
             _chatService = CreateChatService();
+            _cloudflaredService = new CloudflaredService();
             _chatService.ChatListUpdated += _chatService_ChatListUpdated;
             // Invocar manualmente la actualización después de suscribirse
             _chatService.UpdateHandlerChats();
+            
+            // Verificar estado de Cloudflare
+            _ = CheckCloudflareStatus();
+        }
+
+        private async System.Threading.Tasks.Task CheckCloudflareStatus()
+        {
+            try
+            {
+                Console.WriteLine("Checking Cloudflare status...");
+                
+                // Verificar si necesita actualización
+                _cloudflareNeedsUpdate = await _cloudflaredService.NeedsUpdate();
+                
+                // Actualizar UI en el hilo principal
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    UpdateCloudflareButton();
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error checking Cloudflare status: {ex.Message}");
+                
+                // En caso de error, mostrar botón con estado de error
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    var content = this.Content as FrameworkElement;
+                    if (content == null) return;
+
+                    var button = content.FindName("CloudflareUpdateButton") as Button;
+                    var textBlock = content.FindName("CloudflareButtonText") as TextBlock;
+                    
+                    if (button != null) button.IsEnabled = false;
+                    if (textBlock != null) textBlock.Text = "Error al verificar";
+                });
+            }
+        }
+
+        private void UpdateCloudflareButton()
+        {
+            var content = this.Content as FrameworkElement;
+            if (content == null) return;
+
+            var button = content.FindName("CloudflareUpdateButton") as Button;
+            var textBlock = content.FindName("CloudflareButtonText") as TextBlock;
+            
+            if (button == null || textBlock == null) return;
+
+            if (_cloudflareNeedsUpdate)
+            {
+                // Hay actualización disponible o no está descargado
+                button.IsEnabled = true;
+                textBlock.Text = _cloudflaredService.IsExecutablePresent() 
+                    ? "Actualizar Cloudflare" 
+                    : "Descargar Cloudflare";
+                button.Style = (Style)Application.Current.Resources["AccentButtonStyle"];
+            }
+            else
+            {
+                // Ya está actualizado
+                button.IsEnabled = false;
+                textBlock.Text = "Cloudflare actualizado";
+            }
+        }
+
+        private async void CloudflareUpdateButton_Click(object sender, RoutedEventArgs e)
+        {
+            var content = this.Content as FrameworkElement;
+            if (content == null) return;
+
+            var button = content.FindName("CloudflareUpdateButton") as Button;
+            var textBlock = content.FindName("CloudflareButtonText") as TextBlock;
+            
+            if (button == null || textBlock == null) return;
+
+            // Deshabilitar el botón mientras se descarga
+            button.IsEnabled = false;
+            textBlock.Text = "Descargando...";
+
+            try
+            {
+                bool success = await _cloudflaredService.DownloadExecutable();
+                
+                if (success)
+                {
+                    _cloudflareNeedsUpdate = false;
+                    textBlock.Text = "Cloudflare actualizado";
+                    
+                    // Mostrar notificación de éxito
+                    var dialog = new ContentDialog
+                    {
+                        Title = "Descarga completada",
+                        Content = "Cloudflare se ha descargado/actualizado correctamente.",
+                        CloseButtonText = "Aceptar",
+                        XamlRoot = this.Content.XamlRoot
+                    };
+                    await dialog.ShowAsync();
+                }
+                else
+                {
+                    textBlock.Text = "Error en descarga";
+                    button.IsEnabled = true;
+                    
+                    // Mostrar error
+                    var dialog = new ContentDialog
+                    {
+                        Title = "Error",
+                        Content = "No se pudo descargar Cloudflare. Verifica tu conexión a internet.",
+                        CloseButtonText = "Aceptar",
+                        XamlRoot = this.Content.XamlRoot
+                    };
+                    await dialog.ShowAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error downloading Cloudflare: {ex.Message}");
+                textBlock.Text = "Error en descarga";
+                button.IsEnabled = true;
+                
+                var dialog = new ContentDialog
+                {
+                    Title = "Error",
+                    Content = $"Error al descargar Cloudflare: {ex.Message}",
+                    CloseButtonText = "Aceptar",
+                    XamlRoot = this.Content.XamlRoot
+                };
+                await dialog.ShowAsync();
+            }
         }
 
         private void _chatService_ChatListUpdated(object? sender, List<Data.Chat> e)
