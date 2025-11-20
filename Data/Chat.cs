@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace NexChat.Data
@@ -14,6 +15,9 @@ namespace NexChat.Data
         public List<Message> Messages { get; set; }
         public bool IsInvited { get; set; } = true;
         public bool IsRunning { get; set; } = false;
+        
+        [JsonIgnore]
+        public int? ServerPort { get; set; }
 
         public Chat() 
         {

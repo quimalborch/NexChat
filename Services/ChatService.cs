@@ -13,6 +13,8 @@ namespace NexChat.Services
     {
         public List<Chat> chats = new List<Chat>();
         public event EventHandler<List<Chat>> ChatListUpdated;
+        private Dictionary<string, WebServerService> _webServers = new Dictionary<string, WebServerService>();
+        
         public ChatService() 
         {
             LoadChats();
@@ -138,13 +140,30 @@ namespace NexChat.Services
             if (chat is null || chat.IsRunning) 
                 return false;
             
-            chat.IsRunning = true;
-            SaveChats();
+            // Crear y arrancar el servidor web
+            var webServer = new WebServerService();
+            if (webServer.Start())
+            {
+                _webServers[chatId] = webServer;
+                chat.IsRunning = true;
+                chat.ServerPort = webServer.Port;
+                SaveChats();
+                
+                Console.WriteLine($"Web server started for chat '{chat.Name}' on port {webServer.Port}");
+                
+                // Probar la conexión en segundo plano
+                Task.Run(async () =>
+                {
+                    await Task.Delay(500); // Esperar un poco para que el servidor esté listo
+                    bool testResult = await webServer.TestConnection();
+                    Console.WriteLine($"Server test result: {(testResult ? "✓ SUCCESS" : "✗ FAILED")}");
+                });
+                
+                return true;
+            }
             
-            //TODO: Implementar lógica para levantar el web server
-            // Por ejemplo: iniciar un servidor HTTP, abrir puerto, etc.
-            
-            return true;
+            Console.WriteLine($"Failed to start web server for chat '{chat.Name}'");
+            return false;
         }
 
         public bool StopWebServer(string chatId)
@@ -153,12 +172,18 @@ namespace NexChat.Services
             if (chat is null || !chat.IsRunning) 
                 return false;
             
+            // Detener el servidor web
+            if (_webServers.TryGetValue(chatId, out var webServer))
+            {
+                webServer.Stop();
+                _webServers.Remove(chatId);
+            }
+            
             chat.IsRunning = false;
+            chat.ServerPort = null;
             SaveChats();
             
-            //TODO: Implementar lógica para detener el web server
-            // Por ejemplo: cerrar el servidor HTTP, liberar puerto, etc.
-            
+            Console.WriteLine($"Web server stopped for chat '{chat.Name}'");
             return true;
         }
     }
