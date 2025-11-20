@@ -35,6 +35,8 @@ namespace NexChat
             ChatItems = new ObservableCollection<Chat>();
             _chatService = CreateChatService();
             _chatService.ChatListUpdated += _chatService_ChatListUpdated;
+            // Invocar manualmente la actualización después de suscribirse
+            _chatService.UpdateHandlerChats();
         }
 
         private void _chatService_ChatListUpdated(object? sender, List<Data.Chat> e)
@@ -79,6 +81,65 @@ namespace NexChat
                 string userInput = textBox.Text;
                 // aquí puedes usar la variable userInput
                 _chatService.CreateChat(userInput);
+            }
+        }
+
+        private void ChatItem_RightTapped(object sender, RightTappedRoutedEventArgs e)
+        {
+            var grid = sender as Grid;
+            if (grid != null)
+            {
+                var flyout = FlyoutBase.GetAttachedFlyout(grid) as MenuFlyout;
+                if (flyout != null)
+                {
+                    flyout.ShowAt(grid, e.GetPosition(grid));
+                }
+            }
+        }
+
+        private async void EditChat_Click(object sender, RoutedEventArgs e)
+        {
+            var menuItem = sender as MenuFlyoutItem;
+            if (menuItem?.Tag is string chatId)
+            {
+                var textBox = new TextBox();
+                var dialog = new ContentDialog
+                {
+                    Title = "Editar nombre del chat",
+                    Content = textBox,
+                    PrimaryButtonText = "Aceptar",
+                    CloseButtonText = "Cancelar",
+                    XamlRoot = this.Content.XamlRoot
+                };
+
+                var result = await dialog.ShowAsync();
+                if (result == ContentDialogResult.Primary)
+                {
+                    string newName = textBox.Text;
+                    _chatService.EditChat(chatId, newName);
+                }
+            }
+        }
+
+        private async void DeleteChat_Click(object sender, RoutedEventArgs e)
+        {
+            var menuItem = sender as MenuFlyoutItem;
+            if (menuItem?.Tag is string chatId)
+            {
+                var dialog = new ContentDialog
+                {
+                    Title = "Eliminar chat",
+                    Content = "¿Estás seguro de que deseas eliminar este chat?",
+                    PrimaryButtonText = "Eliminar",
+                    CloseButtonText = "Cancelar",
+                    XamlRoot = this.Content.XamlRoot
+                };
+
+                var result = await dialog.ShowAsync();
+                if (result == ContentDialogResult.Primary)
+                {
+                    _chatService.DeleteChat(chatId);
+                }
             }
         }
     }

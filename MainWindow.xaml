@@ -41,7 +41,19 @@
                   ItemClick="ChatListView_ItemClick">
             <ListView.ItemTemplate>
                 <DataTemplate x:DataType="local:Chat">
-                    <Grid Padding="12" Background="Transparent">
+                    <Grid Padding="12" Background="Transparent" RightTapped="ChatItem_RightTapped">
+                        <FlyoutBase.AttachedFlyout>
+                            <MenuFlyout Placement="Right">
+                                <MenuFlyoutItem Text="Editar" 
+                                                Click="EditChat_Click" 
+                                                Tag="{x:Bind Id}"/>
+                                <MenuFlyoutSeparator/>
+                                <MenuFlyoutItem Text="Eliminar" 
+                                                Click="DeleteChat_Click" 
+                                                Tag="{x:Bind Id}"
+                                                Foreground="PaleVioletRed"/>
+                            </MenuFlyout>
+                        </FlyoutBase.AttachedFlyout>
                         <StackPanel Orientation="Vertical" Spacing="4">
                             <TextBlock Text="{x:Bind Name}" FontSize="16" FontWeight="SemiBold"/>
                             <TextBlock Text="aleix123" FontSize="12" Foreground="{ThemeResource TextFillColorSecondary}"/>

@@ -12,7 +12,7 @@ namespace NexChat.Data
         public string Name { get; set; }
         public string? CodeInvitation { get; set; }
         public List<Message> Messages { get; set; }
-
+        public bool IsInvited { get; set; } = true;
         public Chat(string Name) 
         {
             this.Name = Name;
