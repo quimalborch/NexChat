@@ -77,12 +77,18 @@ namespace NexChat.Services
 
         public void EditChat(string chatId, string newName)
         {
-            //TODO: Implementar lógica para editar el chat
+            Chat? chat = chats.FirstOrDefault(c => c.Id == chatId);
+            if (chat is null) return;
+            chat.Name = newName;
+            SaveChats();
         }
 
         public void DeleteChat(string chatId)
         {
-            //TODO: Implementar lógica para eliminar el chat
+            Chat? chat = chats.FirstOrDefault(c => c.Id == chatId);
+            if (chat is null) return;
+            chats.Remove(chat);
+            SaveChats();
         }
     }
 }
