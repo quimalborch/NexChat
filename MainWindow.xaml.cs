@@ -10,6 +10,7 @@ using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
+using NexChat.Services;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
 
@@ -23,9 +24,20 @@ namespace NexChat
     /// </summary>
     public sealed partial class MainWindow : Window
     {
+        private ChatService _chatService;
         public MainWindow()
         {
             InitializeComponent();
+            _chatService = CreateChatService();
+        }
+
+        private ChatService CreateChatService(){
+            return new ChatService();
+        }
+
+        private void BtnCrearNuevoChat_Click(object sender, RoutedEventArgs e)
+        {
+
         }
     }
 }
