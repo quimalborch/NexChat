@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "NexChat (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "NexChat (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
