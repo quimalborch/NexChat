@@ -67,18 +67,20 @@ namespace NexChat.Services
             return chatFile;
         }
 
-        public async void JoinChat(string Name)
+        public async Task<bool> JoinChat(string Name)
         {
             //GET TO RECUPEAR CHAT
             Chat? chatRecuperado = await _chatConnectorService.GetChat(Name);
 
-            if (chatRecuperado is null) return;
+            if (chatRecuperado is null) return false;
 
             chatRecuperado.IsInvited = true;
             chatRecuperado.Name = chatRecuperado.Name;
             chatRecuperado.CodeInvitation = Name;
             chats.Add(chatRecuperado);
             SaveChats();
+
+            return true;
         }
         public void CreateChat(string Name)
         {
@@ -195,6 +197,7 @@ namespace NexChat.Services
         {
             try
             {
+                if (url is null) return string.Empty;
                 var match = Regex.Match(url, @"https://([^.]+)");
                 if (match.Success)
                     return match.Groups[1].Value;
@@ -235,6 +238,7 @@ namespace NexChat.Services
             }
             
             chat.IsRunning = false;
+            chat.CodeInvitation = null;
             chat.ServerPort = null;
             SaveChats();
             

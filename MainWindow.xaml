@@ -113,6 +113,15 @@
                                             </MenuFlyoutItem.Icon>
                                         </MenuFlyoutItem>
                                         <MenuFlyoutSeparator/>
+                                        <MenuFlyoutItem x:Name="CopyURLMenuItem"
+                                                Text="Copy Direction Code" 
+                                                Click="CopyURLMenuItem_Click" 
+                                                Tag="{x:Bind Id}">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon Glyph="&#xE71A;"/>
+                                            </MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
+                                        <MenuFlyoutSeparator/>
                                         <MenuFlyoutItem Text="Editar" 
                                                         Click="EditChat_Click" 
                                                         Tag="{x:Bind Id}"/>

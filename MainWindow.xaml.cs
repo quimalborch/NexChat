@@ -398,7 +398,18 @@ namespace NexChat
             {
                 string userInput = textBox.Text;
                 // aquí puedes usar la variable userInput
-                _chatService.JoinChat(userInput);
+                if (!await _chatService.JoinChat(userInput))
+                {
+                    // Mostrar notificación de éxito
+                    var dialogErrorConnectChat = new ContentDialog
+                    {
+                        Title = "No se pudo unir al chat",
+                        Content = "Verifica que el código sea correcto y que el chat esté disponible.",
+                        CloseButtonText = "Aceptar",
+                        XamlRoot = this.Content.XamlRoot
+                    };
+                    await dialogErrorConnectChat.ShowAsync();
+                }
             }
         }
 
@@ -519,6 +530,7 @@ namespace NexChat
             // Buscar los MenuFlyoutItems por nombre
             MenuFlyoutItem playMenuItem = null;
             MenuFlyoutItem stopMenuItem = null;
+            MenuFlyoutItem copyURLMenuItem = null;
 
             foreach (var item in menuFlyout.Items)
             {
@@ -528,6 +540,8 @@ namespace NexChat
                         playMenuItem = menuItem;
                     else if (menuItem.Text == "Stop")
                         stopMenuItem = menuItem;
+                    else if (menuItem.Text == "Copy Direction Code")
+                        copyURLMenuItem = menuItem;
                 }
             }
 
@@ -537,6 +551,30 @@ namespace NexChat
             
             if (stopMenuItem != null)
                 stopMenuItem.Visibility = chatItem.IsRunning ? Visibility.Visible : Visibility.Collapsed;
+            
+            // Mostrar CopyURLMenuItem solo si CodeInvitation no es null y IsInvited es false
+            if (copyURLMenuItem != null)
+                copyURLMenuItem.Visibility = (!string.IsNullOrEmpty(chatItem.CodeInvitation) && !chatItem.IsInvited) 
+                    ? Visibility.Visible 
+                    : Visibility.Collapsed;
+        }
+
+        private void CopyURLMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            var menuItem = sender as MenuFlyoutItem;
+            if (menuItem?.Tag is string chatId)
+            {
+                // Copiar al portapapeles la URL del chat
+                var chat = ChatItems.FirstOrDefault(c => c.Id == chatId);
+                if (chat == null) return;
+                if (chat.ServerPort.HasValue)
+                {
+                    string url = $"{chat.CodeInvitation}";
+                    var dataPackage = new Windows.ApplicationModel.DataTransfer.DataPackage();
+                    dataPackage.SetText(url);
+                    Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(dataPackage);
+                }
+            }
         }
     }
 }

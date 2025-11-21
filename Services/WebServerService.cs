@@ -69,7 +69,6 @@ namespace NexChat.Services
                     Console.WriteLine($"✓ HttpListener started successfully on port {Port}");
                     Console.WriteLine($"✓ IsListening: {_listener.IsListening}");
                     Console.WriteLine($"✓ Server URL: http://localhost:{Port}/");
-                    Console.WriteLine($"✓ Accepts connections from: ANY hostname (remote-ready)");
                     
                     // Iniciar tarea para escuchar peticiones
                     _listenerTask = Task.Run(() => HandleIncomingConnections(_cancellationTokenSource.Token));
