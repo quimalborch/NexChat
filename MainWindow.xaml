@@ -73,6 +73,12 @@
                             Height="40" 
                             Click="BtnCrearNuevoChat_Click"
                             CornerRadius="8"/>
+                    <Button x:Name="BtnUnirseNuevoChat" 
+                            Content="Conectar a Chat" 
+                            HorizontalAlignment="Stretch"
+                            Height="40" 
+                            Click="BtnUnirseNuevoChat_Click"
+                            CornerRadius="8"/>
                     <TextBlock Text="Mis Chats" 
                                FontSize="20" 
                                FontWeight="Bold"

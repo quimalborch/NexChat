@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -15,10 +16,12 @@ namespace NexChat.Services
         public event EventHandler<List<Chat>> ChatListUpdated;
         private Dictionary<string, WebServerService> _webServers = new Dictionary<string, WebServerService>();
         private CloudflaredService _cloudflaredService;
-        
-        public ChatService(CloudflaredService cloudflaredService) 
+        private ChatConnectorService _chatConnectorService;
+
+        public ChatService(CloudflaredService cloudflaredService, ChatConnectorService chatConnectorService) 
         {
             _cloudflaredService = cloudflaredService;
+            _chatConnectorService = chatConnectorService;
             LoadChats();
         }
 
@@ -64,6 +67,19 @@ namespace NexChat.Services
             return chatFile;
         }
 
+        public async void JoinChat(string Name)
+        {
+            //GET TO RECUPEAR CHAT
+            Chat? chatRecuperado = await _chatConnectorService.GetChat(Name);
+
+            if (chatRecuperado is null) return;
+
+            chatRecuperado.IsInvited = true;
+            chatRecuperado.Name = chatRecuperado.Name;
+            chatRecuperado.CodeInvitation = Name;
+            chats.Add(chatRecuperado);
+            SaveChats();
+        }
         public void CreateChat(string Name)
         {
             Chat chat = new Chat(Name);
@@ -74,6 +90,14 @@ namespace NexChat.Services
 
         private void SaveChats()
         {
+            foreach (Chat _chat in chats)
+            {
+                if (_chat.IsInvited)
+                {
+                    _chat.Messages = new List<Message>();
+                }
+            }
+
             string? conteindoJSONChats = System.Text.Json.JsonSerializer.Serialize(chats);
 
             if (string.IsNullOrEmpty(conteindoJSONChats))
@@ -141,14 +165,16 @@ namespace NexChat.Services
             Chat? chat = GetChatById(chatId);
             if (chat is null || chat.IsRunning) 
                 return false;
-            
+
             // Crear y arrancar el servidor web con soporte de túnel
-            var webServer = new WebServerService(_cloudflaredService);
+            WebServerService webServer = new WebServerService(_cloudflaredService);
+            webServer.ChatListUpdated += WebServer_ChatListUpdated;
             if (await webServer.Start(chatId, enableTunnel))
             {
                 _webServers[chatId] = webServer;
                 chat.IsRunning = true;
                 chat.ServerPort = webServer.Port;
+                chat.CodeInvitation = $"{GetSubdomain(webServer.TunnelUrl)}";
                 SaveChats();
                 
                 Console.WriteLine($"Web server started for chat '{chat.Name}' on port {webServer.Port}");
@@ -158,19 +184,41 @@ namespace NexChat.Services
                     Console.WriteLine($"Cloudflare tunnel active: {webServer.TunnelUrl}");
                 }
                 
-                // Probar la conexión en segundo plano
-                Task.Run(async () =>
-                {
-                    await Task.Delay(500); // Esperar un poco para que el servidor esté listo
-                    bool testResult = await webServer.TestConnection();
-                    Console.WriteLine($"Server test result: {(testResult ? "✓ SUCCESS" : "✗ FAILED")}");
-                });
-                
                 return true;
             }
             
             Console.WriteLine($"Failed to start web server for chat '{chat.Name}'");
             return false;
+        }
+
+        public string GetSubdomain(string url)
+        {
+            try
+            {
+                var match = Regex.Match(url, @"https://([^.]+)");
+                if (match.Success)
+                    return match.Groups[1].Value;
+
+                return string.Empty;
+            }
+            catch (Exception)
+            {
+                return string.Empty;
+            }
+        }
+
+        private Chat? WebServer_ChatListUpdated(string chatId)
+        {
+            return WebGetChat(chatId);
+        }
+
+        public Chat? WebGetChat(string chatId)
+        {
+            Chat? chat = GetChatById(chatId);
+            if (chat is null || !chat.IsRunning)
+                return null;
+
+            return chat;
         }
 
         public async Task<bool> StopWebServer(string chatId)

@@ -29,6 +29,7 @@ namespace NexChat
     {
         private ChatService _chatService;
         private CloudflaredService _cloudflaredService;
+        private ChatConnectorService _chatConnectorService;
         public ObservableCollection<Chat> ChatItems { get; set; }
         private Chat _selectedChat;
         private string _currentUserId = "USER_LOCAL"; // ID del usuario actual
@@ -38,12 +39,13 @@ namespace NexChat
         {
             InitializeComponent();
             ChatItems = new ObservableCollection<Chat>();
+            _chatConnectorService = new ChatConnectorService();
             _cloudflaredService = new CloudflaredService();
             _chatService = CreateChatService();
             _chatService.ChatListUpdated += _chatService_ChatListUpdated;
             // Invocar manualmente la actualización después de suscribirse
             _chatService.UpdateHandlerChats();
-            
+
             // Verificar estado de Cloudflare
             _ = CheckCloudflareStatus();
         }
@@ -185,7 +187,7 @@ namespace NexChat
         }
 
         private ChatService CreateChatService(){
-            return new ChatService(_cloudflaredService);
+            return new ChatService(_cloudflaredService, _chatConnectorService);
         }
 
         private void ChatListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -377,6 +379,27 @@ namespace NexChat
         private void ChatListView_ItemClick(object sender, ItemClickEventArgs e)
         {
             // Ya no se usa, ahora usamos SelectionChanged
+        }
+
+        private async void BtnUnirseNuevoChat_Click(object sender, RoutedEventArgs e)
+        {
+            var textBox = new TextBox();
+            var dialog = new ContentDialog
+            {
+                Title = "Introduce codigo sala",
+                Content = textBox,
+                PrimaryButtonText = "Aceptar",
+                CloseButtonText = "Cancelar",
+                XamlRoot = this.Content.XamlRoot
+            };
+
+            var result = await dialog.ShowAsync();
+            if (result == ContentDialogResult.Primary)
+            {
+                string userInput = textBox.Text;
+                // aquí puedes usar la variable userInput
+                _chatService.JoinChat(userInput);
+            }
         }
 
         private async void BtnCrearNuevoChat_Click(object sender, RoutedEventArgs e)

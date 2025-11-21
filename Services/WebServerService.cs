@@ -1,4 +1,6 @@
-﻿using System;
+﻿using NexChat.Data;
+using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
@@ -20,6 +22,9 @@ namespace NexChat.Services
         public bool IsRunning => _listener?.IsListening ?? false;
         public string? TunnelUrl { get; private set; }
         public bool IsTunnelActive { get; private set; }
+        public EventHandler<EventArgs> TunnelActive;
+        public delegate Chat? ChatUpdatedHandler(string chatId);
+        public event ChatUpdatedHandler ChatListUpdated;
 
         public WebServerService(CloudflaredService? cloudflaredService = null)
         {
@@ -372,7 +377,30 @@ namespace NexChat.Services
                         response.StatusCode = 200;
                         Console.WriteLine("? Responding to /ping with pong");
                         break;
-                        
+
+                    case "/chat/getchat":
+                        if (_chatId is not null)
+                        {
+                            Chat? respuesta = ChatListUpdated?.Invoke(_chatId);
+                            if (respuesta != null)
+                            {
+                                responseString = System.Text.Json.JsonSerializer.Serialize(respuesta);
+                                response.StatusCode = 200;
+                                Console.WriteLine("? Responding to /chat/getChat with chat data");
+                            }
+                            else
+                            {
+                                responseString = "Chat not found";
+                                response.StatusCode = 404;
+                                Console.WriteLine("? Chat not found for /chat/getChat");
+                            }
+                        } else
+                        {
+                            responseString = "ChatId not set";
+                            response.StatusCode = 400;
+                            Console.WriteLine("? ChatId not set for /chat/getChat");
+                        }
+                        break;
                     default:
                         responseString = $"NexChat WebServer - Unknown endpoint: {request.Url?.AbsolutePath}";
                         response.StatusCode = 404;
