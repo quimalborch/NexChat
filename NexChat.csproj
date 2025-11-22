@@ -12,7 +12,10 @@
     <WinUISDKReferences>false</WinUISDKReferences>
     <EnableMsixTooling>true</EnableMsixTooling>
     <Nullable>enable</Nullable>
-    <!-- IMPORTANTE: Incluir el runtime de Windows App SDK -->
+  </PropertyGroup>
+
+  <!-- IMPORTANTE: Configuración solo para Release (publish) -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
   </PropertyGroup>
