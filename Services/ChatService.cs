@@ -69,15 +69,21 @@ namespace NexChat.Services
 
         public async Task<bool> JoinChat(string Name)
         {
-            //GET TO RECUPEAR CHAT
             Chat? chatRecuperado = await _chatConnectorService.GetChat(Name);
 
             if (chatRecuperado is null) return false;
 
-            chatRecuperado.IsInvited = true;
-            chatRecuperado.Name = chatRecuperado.Name;
-            chatRecuperado.CodeInvitation = Name;
-            chats.Add(chatRecuperado);
+            string ChatRemotoName = $"{chatRecuperado.Name}";
+
+#if DEBUG
+            ChatRemotoName = ChatRemotoName.Insert(0, "[REMOTO] ");
+#endif
+
+            Chat? chatRemoto = new Chat(ChatRemotoName);
+
+            chatRemoto.IsInvited = true;
+            chatRemoto.CodeInvitation = Name;
+            chats.Add(chatRemoto);
             SaveChats();
 
             return true;

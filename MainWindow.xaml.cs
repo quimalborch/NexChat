@@ -547,10 +547,10 @@ namespace NexChat
 
             // Mostrar/ocultar según el estado
             if (playMenuItem != null)
-                playMenuItem.Visibility = chatItem.IsRunning ? Visibility.Collapsed : Visibility.Visible;
+                playMenuItem.Visibility = (chatItem.IsRunning || chatItem.IsInvited) ? Visibility.Collapsed : Visibility.Visible;
             
             if (stopMenuItem != null)
-                stopMenuItem.Visibility = chatItem.IsRunning ? Visibility.Visible : Visibility.Collapsed;
+                stopMenuItem.Visibility = (!chatItem.IsRunning || chatItem.IsInvited) ? Visibility.Collapsed : Visibility.Visible;
             
             // Mostrar CopyURLMenuItem solo si CodeInvitation no es null y IsInvited es false
             if (copyURLMenuItem != null)
