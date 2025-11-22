@@ -53,5 +53,38 @@ namespace NexChat.Services
                 return null;
             }
         }
+
+        public async Task<bool> SendMessage(string url, Message message)
+        {
+            try
+            {
+                // Construir la URL completa
+                string fullUrl = $"https://{url}.trycloudflare.com/chat/sendMessage";
+
+                // Hacer la petición GET
+                HttpContent content = new StringContent(JsonSerializer.Serialize(message), Encoding.UTF8, "application/json");
+                HttpResponseMessage response = await _httpClient.PostAsync(fullUrl, content);
+                response.EnsureSuccessStatusCode();
+
+                if (response.StatusCode is System.Net.HttpStatusCode.OK)
+                {
+                    return true;
+                }
+
+                return false;
+            }
+            catch (HttpRequestException ex)
+            {
+                // Manejar errores de HTTP
+                Console.WriteLine($"Error en la petición HTTP: {ex.Message}");
+                return false; ;
+            }
+            catch (JsonException ex)
+            {
+                // Manejar errores de serialización
+                Console.WriteLine($"Error al serializar JSON: {ex.Message}");
+                return false;
+            }
+        }
     }
 }

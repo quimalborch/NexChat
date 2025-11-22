@@ -26,6 +26,10 @@ namespace NexChat.Services
         public delegate Chat? ChatUpdatedHandler(string chatId);
         public event ChatUpdatedHandler ChatListUpdated;
 
+        public delegate bool CreateMessageHandler(string chatId, Message message);
+        public event CreateMessageHandler CreateMessage;
+
+
         public WebServerService(CloudflaredService? cloudflaredService = null)
         {
             _cloudflaredService = cloudflaredService;
@@ -378,28 +382,86 @@ namespace NexChat.Services
                         break;
 
                     case "/chat/getchat":
-                        if (_chatId is not null)
-                        {
-                            Chat? respuesta = ChatListUpdated?.Invoke(_chatId);
-                            if (respuesta != null)
-                            {
-                                responseString = System.Text.Json.JsonSerializer.Serialize(respuesta);
-                                response.StatusCode = 200;
-                                Console.WriteLine("? Responding to /chat/getChat with chat data");
-                            }
-                            else
-                            {
-                                responseString = "Chat not found";
-                                response.StatusCode = 404;
-                                Console.WriteLine("? Chat not found for /chat/getChat");
-                            }
-                        } else
+                        if (_chatId is null)
                         {
                             responseString = "ChatId not set";
                             response.StatusCode = 400;
                             Console.WriteLine("? ChatId not set for /chat/getChat");
+                            break;
                         }
+
+                        Chat? respuesta = ChatListUpdated?.Invoke(_chatId);
+                        if (respuesta != null)
+                        {
+                            responseString = System.Text.Json.JsonSerializer.Serialize(respuesta);
+                            response.StatusCode = 200;
+                            Console.WriteLine("? Responding to /chat/getChat with chat data");
+                        }
+                        else
+                        {
+                            responseString = "Chat not found";
+                            response.StatusCode = 404;
+                            Console.WriteLine("? Chat not found for /chat/getChat");
+                        }
+
                         break;
+                    case "/chat/sendmessage":
+                        if (_chatId is null) 
+                        {
+                            responseString = "ChatId not set";
+                            response.StatusCode = 400;
+                            Console.WriteLine("? ChatId not set for /chat/getChat");
+                            break;
+                        }
+
+                        // Leer el cuerpo de la petición
+                        string requestBody;
+                        using (var reader = new System.IO.StreamReader(request.InputStream, request.ContentEncoding))
+                        {
+                            requestBody = await reader.ReadToEndAsync();
+                        }
+
+                        Console.WriteLine($"? Received message to send: {requestBody}");
+
+                        // passar a json a clase Message
+                        Message? newMessage = null;
+                        try
+                        {
+                            newMessage = System.Text.Json.JsonSerializer.Deserialize<Message>(requestBody);
+                            if (newMessage == null)
+                            {
+                                responseString = "Invalid message data";
+                                response.StatusCode = 400;
+                                break;
+                            }
+
+                            // Aquí podrías agregar lógica para almacenar el mensaje o procesarlo según sea necesario
+                            Console.WriteLine($"? Message deserialized successfully: {newMessage.Content}");
+                            bool? _CreateMessage = CreateMessage?.Invoke(_chatId, newMessage);
+                            if (_CreateMessage == true)
+                            {
+                                responseString = "Message created successfully";
+                                response.StatusCode = 200;
+                            }
+                            else
+                            {
+                                responseString = "Failed to create message";
+                                response.StatusCode = 500;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"? Error deserializing message: {ex.Message}");
+                            responseString = "Invalid message format";
+                            response.StatusCode = 400;
+                            break;
+                        }
+
+                        responseString = "Message received";
+                        response.StatusCode = 200;
+                        Console.WriteLine("? Responding to /chat/sendMessage");
+                        break;
+
                     default:
                         responseString = $"NexChat WebServer - Unknown endpoint: {request.Url?.AbsolutePath}";
                         response.StatusCode = 404;

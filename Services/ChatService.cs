@@ -98,21 +98,28 @@ namespace NexChat.Services
 
         private void SaveChats()
         {
-            foreach (Chat _chat in chats)
+            try
             {
-                if (_chat.IsInvited)
+                foreach (Chat _chat in chats)
                 {
-                    _chat.Messages = new List<Message>();
+                    if (_chat.IsInvited)
+                    {
+                        _chat.Messages = new List<Message>();
+                    }
                 }
+
+                string? conteindoJSONChats = System.Text.Json.JsonSerializer.Serialize(chats);
+
+                if (string.IsNullOrEmpty(conteindoJSONChats))
+                    return;
+
+                File.WriteAllText(GetChatPath(), conteindoJSONChats);
+                ChatListUpdated?.Invoke(this, chats);
             }
-
-            string? conteindoJSONChats = System.Text.Json.JsonSerializer.Serialize(chats);
-
-            if (string.IsNullOrEmpty(conteindoJSONChats))
-                return;
-
-            File.WriteAllText(GetChatPath(), conteindoJSONChats);
-            ChatListUpdated?.Invoke(this, chats);
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
         }
 
         public void UpdateHandlerChats()
@@ -159,13 +166,20 @@ namespace NexChat.Services
 
         public void ReceiveMessage(string chatId, Message message)
         {
-            //TODO: Implementar lógica para recibir mensajes desde red/servidor
-            // Este método se llamaría cuando llegue un mensaje nuevo de otro usuario
-            Chat? chat = GetChatById(chatId);
-            if (chat is null) return;
-            
-            chat.Messages.Add(message);
-            SaveChats();
+            try
+            {
+                //TODO: Implementar lógica para recibir mensajes desde red/servidor
+                // Este método se llamaría cuando llegue un mensaje nuevo de otro usuario
+                Chat? chat = GetChatById(chatId);
+                if (chat is null) return;
+
+                chat.Messages.Add(message);
+                SaveChats();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
         }
 
         public async Task<bool> StartWebServer(string chatId, bool enableTunnel = false)
@@ -177,6 +191,7 @@ namespace NexChat.Services
             // Crear y arrancar el servidor web con soporte de túnel
             WebServerService webServer = new WebServerService(_cloudflaredService);
             webServer.ChatListUpdated += WebServer_ChatListUpdated;
+            webServer.CreateMessage += WebServer_CreateMessage;
             if (await webServer.Start(chatId, enableTunnel))
             {
                 _webServers[chatId] = webServer;
@@ -197,6 +212,20 @@ namespace NexChat.Services
             
             Console.WriteLine($"Failed to start web server for chat '{chat.Name}'");
             return false;
+        }
+
+        private bool WebServer_CreateMessage(string chatId, Message message)
+        {
+            try
+            {
+                ReceiveMessage(chatId, message);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                return false;
+            }
         }
 
         public string GetSubdomain(string url)

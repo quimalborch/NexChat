@@ -16,6 +16,7 @@ using System.Runtime.InteropServices.WindowsRuntime;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
 using Microsoft.UI;
+using System.Threading.Tasks;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -224,10 +225,45 @@ namespace NexChat
             chatHeaderInfo.Text = $"Code: {chat.CodeInvitation ?? "Sin código"}";
 
             // Cargar mensajes
-            LoadMessages(chat.Messages);
+
+            if (!chat.IsInvited)
+            {
+                LoadMessages(chat.Messages);
+            } else
+            {
+                if (chat.CodeInvitation is null) return;
+                LoadMessagesRemote(chat.CodeInvitation);
+            }
 
             // Scroll al final
             ScrollToBottom();
+        }
+
+        private void LoadMessagesRemote(string ConnectionCode)
+        {
+            var content = this.Content as FrameworkElement;
+            if (content == null) return;
+
+            var messagesPanel = content.FindName("MessagesPanel") as StackPanel;
+            if (messagesPanel == null) return;
+
+            messagesPanel.Children.Clear();
+
+            _chatConnectorService.GetChat(ConnectionCode).ContinueWith(chatTask =>
+            {
+                var chat = chatTask.Result;
+                if (chat == null) return;
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    LoadMessages(chat.Messages);
+                    ScrollToBottom();
+                });
+            });
+
+            //foreach (var message in messages)
+            //{
+            //    AddMessageToUI(message);
+            //}
         }
 
         private void LoadMessages(List<Message> messages)
@@ -321,33 +357,102 @@ namespace NexChat
         {
             if (e.Key == Windows.System.VirtualKey.Enter)
             {
-                SendMessage();
+                SendMessageStarter();
                 e.Handled = true;
             }
         }
 
         private void SendButton_Click(object sender, RoutedEventArgs e)
         {
-            SendMessage();
+            SendMessageStarter();
         }
 
-        private void SendMessage()
+        private void SendMessageStarter()
         {
             var content = this.Content as FrameworkElement;
             if (content == null) return;
 
-            var messageInputBox = content.FindName("MessageInputBox") as TextBox;
-            if (messageInputBox == null) return;
+            TextBox? messageInputBox = content.FindName("MessageInputBox") as TextBox;
+            if (messageInputBox is null) return;
 
-            if (_selectedChat == null || string.IsNullOrWhiteSpace(messageInputBox.Text))
+            if (_selectedChat is null || string.IsNullOrWhiteSpace(messageInputBox.Text))
                 return;
 
             string messageContent = messageInputBox.Text;
-            
+
             //TODO: Implementar lógica de envío de mensaje a través del ChatService a la red
-            var sender = new Sender(_currentUserId) { Name = "Yo" };
-            var message = new Message(_selectedChat, sender, messageContent);
-            
+            var _sender = new Sender(_currentUserId) { Name = RecuperarName() };
+            var message = new Message(_selectedChat, _sender, messageContent);
+
+            if (!_selectedChat.IsInvited)
+            {
+                SendMessage(messageInputBox, message);
+            }
+            else
+            {
+                SendMessageExternal(messageInputBox, message);
+            }
+        }
+
+        private string RecuperarName()
+        {
+            if (!_selectedChat.IsInvited)
+            {
+                return "Yo";
+            } else
+            {
+                return "External";
+            }
+        }
+
+        private void SendMessageExternal(TextBox messageInputBox, Message message)
+        {
+            if (_selectedChat.CodeInvitation is null)
+            {
+                var dialog = new ContentDialog
+                {
+                    Title = "Error al enviar mensaje",
+                    Content = "No se ha encontrado el codigo de invitación.",
+                    CloseButtonText = "Aceptar",
+                    XamlRoot = this.Content.XamlRoot
+                };
+
+                Task.Run(() => dialog.ShowAsync());
+                return;
+            }
+
+            _chatConnectorService.SendMessage(_selectedChat.CodeInvitation, message).ContinueWith(sendTask =>
+            {
+                bool success = sendTask.Result;
+                if (success)
+                {
+                    DispatcherQueue.TryEnqueue(() =>
+                    {
+                        AddMessageToUI(message);
+                        messageInputBox.Text = string.Empty;
+                        ScrollToBottom();
+                    });
+                }
+                else
+                {
+                    // Manejar error de envío (opcional)
+                    DispatcherQueue.TryEnqueue(async () =>
+                    {
+                        var dialog = new ContentDialog
+                        {
+                            Title = "Error al enviar mensaje",
+                            Content = "No se pudo enviar el mensaje. Verifica tu conexión.",
+                            CloseButtonText = "Aceptar",
+                            XamlRoot = this.Content.XamlRoot
+                        };
+                        await dialog.ShowAsync();
+                    });
+                }
+            });
+        }
+
+        private void SendMessage(TextBox messageInputBox, Message message)
+        {            
             // Agregar mensaje al chat usando el servicio
             _chatService.AddMessage(_selectedChat.Id, message);
             
