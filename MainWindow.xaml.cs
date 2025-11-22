@@ -33,7 +33,7 @@ namespace NexChat
         private ChatConnectorService _chatConnectorService;
         public ObservableCollection<Chat> ChatItems { get; set; }
         private Chat _selectedChat;
-        private string _currentUserId = "USER_LOCAL"; // ID del usuario actual
+        private string _currentUserId = Guid.NewGuid().ToString(); // ID del usuario actual
         private bool _cloudflareNeedsUpdate = false;
 
         public MainWindow()
@@ -381,7 +381,6 @@ namespace NexChat
             string messageContent = messageInputBox.Text;
 
             string senderId = _currentUserId;
-            if (_selectedChat.IsInvited) { senderId = Guid.NewGuid().ToString(); }
 
             //TODO: Implementar lógica de envío de mensaje a través del ChatService a la red
             var _sender = new Sender(senderId) { Name = RecuperarName() };
