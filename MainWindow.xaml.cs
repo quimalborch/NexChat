@@ -380,8 +380,11 @@ namespace NexChat
 
             string messageContent = messageInputBox.Text;
 
+            string senderId = _currentUserId;
+            if (_selectedChat.IsInvited) { senderId = Guid.NewGuid().ToString(); }
+
             //TODO: Implementar lógica de envío de mensaje a través del ChatService a la red
-            var _sender = new Sender(_currentUserId) { Name = RecuperarName() };
+            var _sender = new Sender(senderId) { Name = RecuperarName() };
             var message = new Message(_selectedChat, _sender, messageContent);
 
             if (!_selectedChat.IsInvited)
