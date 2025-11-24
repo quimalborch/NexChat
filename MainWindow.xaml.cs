@@ -1,4 +1,4 @@
-using Microsoft.UI.Xaml;
+ï»¿using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Data;
@@ -44,7 +44,7 @@ namespace NexChat
             _cloudflaredService = new CloudflaredService();
             _chatService = CreateChatService();
             _chatService.ChatListUpdated += _chatService_ChatListUpdated;
-            // Invocar manualmente la actualización después de suscribirse
+            // Invocar manualmente la actualizaciÃ³n despuÃ©s de suscribirse
             _chatService.UpdateHandlerChats();
 
             // Verificar estado de Cloudflare
@@ -57,7 +57,7 @@ namespace NexChat
             {
                 Console.WriteLine("Checking Cloudflare status...");
                 
-                // Verificar si necesita actualización
+                // Verificar si necesita actualizaciÃ³n
                 _cloudflareNeedsUpdate = await _cloudflaredService.NeedsUpdate();
                 
                 // Actualizar UI en el hilo principal
@@ -70,7 +70,7 @@ namespace NexChat
             {
                 Console.WriteLine($"Error checking Cloudflare status: {ex.Message}");
                 
-                // En caso de error, mostrar botón con estado de error
+                // En caso de error, mostrar botÃ³n con estado de error
                 DispatcherQueue.TryEnqueue(() =>
                 {
                     var content = this.Content as FrameworkElement;
@@ -97,7 +97,7 @@ namespace NexChat
 
             if (_cloudflareNeedsUpdate)
             {
-                // Hay actualización disponible o no está descargado
+                // Hay actualizaciÃ³n disponible o no estÃ¡ descargado
                 button.IsEnabled = true;
                 button.Visibility = Visibility.Visible;
                 textBlock.Text = _cloudflaredService.IsExecutablePresent() 
@@ -107,7 +107,7 @@ namespace NexChat
             }
             else
             {
-                // Ya está actualizado
+                // Ya estÃ¡ actualizado
                 button.IsEnabled = false;
                 button.Visibility = Visibility.Collapsed;
                 textBlock.Text = "Cloudflare actualizado";
@@ -124,7 +124,7 @@ namespace NexChat
             
             if (button == null || textBlock == null) return;
 
-            // Deshabilitar el botón mientras se descarga
+            // Deshabilitar el botÃ³n mientras se descarga
             button.IsEnabled = false;
             textBlock.Text = "Descargando...";
 
@@ -137,7 +137,7 @@ namespace NexChat
                     _cloudflareNeedsUpdate = false;
                     textBlock.Text = "Cloudflare actualizado";
                     
-                    // Mostrar notificación de éxito
+                    // Mostrar notificaciÃ³n de Ã©xito
                     var dialog = new ContentDialog
                     {
                         Title = "Descarga completada",
@@ -156,7 +156,7 @@ namespace NexChat
                     var dialog = new ContentDialog
                     {
                         Title = "Error",
-                        Content = "No se pudo descargar Cloudflare. Verifica tu conexión a internet.",
+                        Content = "No se pudo descargar Cloudflare. Verifica tu conexiÃ³n a internet.",
                         CloseButtonText = "Aceptar",
                         XamlRoot = this.Content.XamlRoot
                     };
@@ -185,7 +185,7 @@ namespace NexChat
             // Dispatch to UI thread since this can be called from background threads (WebSocket)
             DispatcherQueue.TryEnqueue(() =>
             {
-                Console.WriteLine($"?? ChatListUpdated event triggered");
+                Console.WriteLine($"ðŸ”„ ChatListUpdated event triggered");
                 
                 // Primero, verificar si hay mensajes nuevos para el chat seleccionado
                 if (_selectedChat != null)
@@ -193,17 +193,23 @@ namespace NexChat
                     var updatedChat = e.FirstOrDefault(c => c.Id == _selectedChat.Id);
                     if (updatedChat != null)
                     {
-                        Console.WriteLine($"?? Checking for new messages in selected chat '{updatedChat.Name}'");
+                        Console.WriteLine($"ðŸ“± Checking for new messages in selected chat '{updatedChat.Name}'");
                         Console.WriteLine($"   Current chat has {_selectedChat.Messages.Count} messages");
                         Console.WriteLine($"   Updated chat has {updatedChat.Messages.Count} messages");
                         
-                        // Obtener el MessagesPanel para verificar qué mensajes ya están en la UI
+                        // Obtener el MessagesPanel para verificar quÃ© mensajes ya estÃ¡n en la UI
                         var content = this.Content as FrameworkElement;
                         var messagesPanel = content?.FindName("MessagesPanel") as StackPanel;
+                        var messagesScrollViewer = content?.FindName("MessagesScrollViewer") as ScrollViewer;
                         
-                        if (messagesPanel != null)
+                        if (messagesPanel != null && messagesScrollViewer != null)
                         {
-                            // Obtener IDs de mensajes que ya están en la UI
+                            // Verificar si el usuario estÃ¡ al final del scroll ANTES de agregar mensajes
+                            bool wasAtBottom = IsScrolledToBottom(messagesScrollViewer);
+                            
+                            Console.WriteLine($"   User is at bottom: {wasAtBottom}");
+                            
+                            // Obtener IDs de mensajes que ya estÃ¡n en la UI
                             var existingMessageIds = new HashSet<string>();
                             foreach (var child in messagesPanel.Children)
                             {
@@ -215,23 +221,31 @@ namespace NexChat
                             
                             Console.WriteLine($"   UI currently has {existingMessageIds.Count} messages displayed");
                             
-                            // Agregar solo mensajes que NO están en la UI
+                            // Agregar solo mensajes que NO estÃ¡n en la UI
+                            bool newMessagesAdded = false;
                             foreach (var message in updatedChat.Messages)
                             {
                                 if (!existingMessageIds.Contains(message.Id))
                                 {
-                                    Console.WriteLine($"   ? Adding new message to UI: {message.Content.Substring(0, Math.Min(30, message.Content.Length))}...");
+                                    Console.WriteLine($"   âœ… Adding new message to UI: {message.Content.Substring(0, Math.Min(30, message.Content.Length))}...");
                                     AddMessageToUI(message);
+                                    newMessagesAdded = true;
                                 }
                             }
                             
                             // Actualizar la referencia del _selectedChat con los nuevos mensajes
                             _selectedChat = updatedChat;
                             
-                            // Auto-scroll al final si había mensajes nuevos
-                            if (updatedChat.Messages.Count > existingMessageIds.Count)
+                            // Auto-scroll al final SOLO si el usuario estaba al final Y se agregaron mensajes nuevos
+                            if (newMessagesAdded && wasAtBottom)
                             {
-                                ScrollToBottom();
+                                Console.WriteLine($"   ðŸ“œ Auto-scrolling to bottom (user was at bottom)");
+                                // Usar un pequeÃ±o delay para que el layout se actualice
+                                _ = ScrollToBottomWithDelay();
+                            }
+                            else if (newMessagesAdded && !wasAtBottom)
+                            {
+                                Console.WriteLine($"   ðŸ“œ NOT auto-scrolling (user is reading old messages)");
                             }
                         }
                     }
@@ -244,7 +258,56 @@ namespace NexChat
                     ChatItems.Add(chat);
                 }
                 
-                Console.WriteLine($"? ChatList updated with {e.Count} chats");
+                Console.WriteLine($"âœ“ ChatList updated with {e.Count} chats");
+            });
+        }
+
+        /// <summary>
+        /// Verifica si el ScrollViewer estÃ¡ scrolleado hasta el final (con un margen de tolerancia)
+        /// </summary>
+        private bool IsScrolledToBottom(ScrollViewer scrollViewer)
+        {
+            if (scrollViewer == null)
+                return false;
+
+            // Obtener posiciÃ³n actual del scroll
+            double verticalOffset = scrollViewer.VerticalOffset;
+            double scrollableHeight = scrollViewer.ScrollableHeight;
+            
+            // Considerar que estÃ¡ al final si estÃ¡ dentro de 10 pixels del fondo
+            // Esto da un margen de tolerancia para evitar problemas de redondeo
+            const double tolerance = 10.0;
+            
+            bool isAtBottom = (scrollableHeight - verticalOffset) <= tolerance;
+            
+            Console.WriteLine($"   ðŸ“ Scroll position - Offset: {verticalOffset:F2}, Scrollable: {scrollableHeight:F2}, IsAtBottom: {isAtBottom}");
+            
+            return isAtBottom;
+        }
+
+        /// <summary>
+        /// Hace scroll al final con un pequeÃ±o delay para que el layout se actualice
+        /// </summary>
+        private async Task ScrollToBottomWithDelay()
+        {
+            // Esperar a que el layout se actualice
+            await Task.Delay(50);
+            
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                var content = this.Content as FrameworkElement;
+                if (content == null) return;
+
+                var messagesScrollViewer = content.FindName("MessagesScrollViewer") as ScrollViewer;
+                if (messagesScrollViewer == null) return;
+
+                // Forzar actualizaciÃ³n del layout
+                messagesScrollViewer.UpdateLayout();
+                
+                // Hacer scroll al final
+                messagesScrollViewer.ChangeView(null, messagesScrollViewer.ScrollableHeight, null, false);
+                
+                Console.WriteLine($"   âœ“ Scrolled to bottom - New height: {messagesScrollViewer.ScrollableHeight:F2}");
             });
         }
 
@@ -283,7 +346,7 @@ namespace NexChat
 
             // Actualizar header del chat
             chatHeaderName.Text = chat.Name;
-            chatHeaderInfo.Text = $"Code: {chat.CodeInvitation ?? "Sin código"}";
+            chatHeaderInfo.Text = $"Code: {chat.CodeInvitation ?? "Sin cÃ³digo"}";
 
             // Cargar mensajes
 
@@ -353,7 +416,7 @@ namespace NexChat
 
             bool isMyMessage = message.Sender.Id == _currentUserId;
 
-            // Grid contenedor para alineación
+            // Grid contenedor para alineaciÃ³n
             var messageGrid = new Grid
             {
                 Margin = new Thickness(0, 5, 0, 5),
@@ -444,7 +507,7 @@ namespace NexChat
 
             string senderId = _currentUserId;
 
-            //TODO: Implementar lógica de envío de mensaje a través del ChatService a la red
+            //TODO: Implementar lÃ³gica de envÃ­o de mensaje a travÃ©s del ChatService a la red
             var _sender = new Sender(senderId) { Name = RecuperarName() };
             var message = new Message(_selectedChat, _sender, messageContent);
 
@@ -476,7 +539,7 @@ namespace NexChat
                 var dialog = new ContentDialog
                 {
                     Title = "Error al enviar mensaje",
-                    Content = "No se ha encontrado el codigo de invitación.",
+                    Content = "No se ha encontrado el codigo de invitaciÃ³n.",
                     CloseButtonText = "Aceptar",
                     XamlRoot = this.Content.XamlRoot
                 };
@@ -499,13 +562,13 @@ namespace NexChat
                 }
                 else
                 {
-                    // Manejar error de envío (opcional)
+                    // Manejar error de envÃ­o (opcional)
                     DispatcherQueue.TryEnqueue(async () =>
                     {
                         var dialog = new ContentDialog
                         {
                             Title = "Error al enviar mensaje",
-                            Content = "No se pudo enviar el mensaje. Verifica tu conexión.",
+                            Content = "No se pudo enviar el mensaje. Verifica tu conexiÃ³n.",
                             CloseButtonText = "Aceptar",
                             XamlRoot = this.Content.XamlRoot
                         };
@@ -532,7 +595,7 @@ namespace NexChat
 
         private void ScrollToBottom()
         {
-            //TODO: Implementar scroll automático al final cuando se carguen o agreguen mensajes
+            //TODO: Implementar scroll automÃ¡tico al final cuando se carguen o agreguen mensajes
             var content = this.Content as FrameworkElement;
             if (content == null) return;
 
@@ -566,14 +629,14 @@ namespace NexChat
             if (result == ContentDialogResult.Primary)
             {
                 string userInput = textBox.Text;
-                // aquí puedes usar la variable userInput
+                // aquÃ­ puedes usar la variable userInput
                 if (!await _chatService.JoinChat(userInput))
                 {
-                    // Mostrar notificación de éxito
+                    // Mostrar notificaciÃ³n de Ã©xito
                     var dialogErrorConnectChat = new ContentDialog
                     {
                         Title = "No se pudo unir al chat",
-                        Content = "Verifica que el código sea correcto y que el chat esté disponible.",
+                        Content = "Verifica que el cÃ³digo sea correcto y que el chat estÃ© disponible.",
                         CloseButtonText = "Aceptar",
                         XamlRoot = this.Content.XamlRoot
                     };
@@ -599,7 +662,7 @@ namespace NexChat
             if (result == ContentDialogResult.Primary)
             {
                 string userInput = textBox.Text;
-                // aquí puedes usar la variable userInput
+                // aquÃ­ puedes usar la variable userInput
                 _chatService.CreateChat(userInput);
             }
         }
@@ -649,7 +712,7 @@ namespace NexChat
                 var dialog = new ContentDialog
                 {
                     Title = "Eliminar chat",
-                    Content = "¿Estás seguro de que deseas eliminar este chat?",
+                    Content = "Â¿EstÃ¡s seguro de que deseas eliminar este chat?",
                     PrimaryButtonText = "Eliminar",
                     CloseButtonText = "Cancelar",
                     XamlRoot = this.Content.XamlRoot
@@ -668,8 +731,8 @@ namespace NexChat
             var menuItem = sender as MenuFlyoutItem;
             if (menuItem?.Tag is string chatId)
             {
-                // Por defecto, no habilitar túnel. Puedes cambiarlo a true si deseas
-                // habilitar túnel automáticamente cuando se inicia el servidor
+                // Por defecto, no habilitar tÃºnel. Puedes cambiarlo a true si deseas
+                // habilitar tÃºnel automÃ¡ticamente cuando se inicia el servidor
                 bool enableTunnel = true;
                 await _chatService.StartWebServer(chatId, enableTunnel);
             }
@@ -689,7 +752,7 @@ namespace NexChat
             var menuFlyout = sender as MenuFlyout;
             if (menuFlyout == null) return;
 
-            // Obtener el chatId desde el contexto del menú
+            // Obtener el chatId desde el contexto del menÃº
             var grid = menuFlyout.Target as Grid;
             if (grid == null) return;
 
@@ -714,7 +777,7 @@ namespace NexChat
                 }
             }
 
-            // Mostrar/ocultar según el estado
+            // Mostrar/ocultar segÃºn el estado
             if (playMenuItem != null)
                 playMenuItem.Visibility = (chatItem.IsRunning || chatItem.IsInvited) ? Visibility.Collapsed : Visibility.Visible;
             
