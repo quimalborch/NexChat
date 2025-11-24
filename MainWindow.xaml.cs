@@ -464,7 +464,7 @@ namespace NexChat
 
         private async void SendMessageExternal(TextBox messageInputBox, Message message)
         {
-            if (_selectedChat == null || _selectedChat.CodeInvitation is null)
+            if (_selectedChat.CodeInvitation is null)
             {
                 var dialog = new ContentDialog
                 {
@@ -478,22 +478,40 @@ namespace NexChat
                 return;
             }
 
-            // IMPORTANTE: Usar ChatService.AddMessage() que maneja WebSocket correctamente
-            await _chatService.AddMessage(_selectedChat.Id, message);
-            
-            // Agregar mensaje a la UI localmente
-            DispatcherQueue.TryEnqueue(() =>
+            _chatConnectorService.SendMessage(_selectedChat.CodeInvitation, message).ContinueWith(sendTask =>
             {
-                AddMessageToUI(message);
-                messageInputBox.Text = string.Empty;
-                ScrollToBottom();
+                bool success = sendTask.Result;
+                if (success)
+                {
+                    DispatcherQueue.TryEnqueue(() =>
+                    {
+                        AddMessageToUI(message);
+                        messageInputBox.Text = string.Empty;
+                        ScrollToBottom();
+                    });
+                }
+                else
+                {
+                    // Manejar error de envío (opcional)
+                    DispatcherQueue.TryEnqueue(async () =>
+                    {
+                        var dialog = new ContentDialog
+                        {
+                            Title = "Error al enviar mensaje",
+                            Content = "No se pudo enviar el mensaje. Verifica tu conexión.",
+                            CloseButtonText = "Aceptar",
+                            XamlRoot = this.Content.XamlRoot
+                        };
+                        await dialog.ShowAsync();
+                    });
+                }
             });
         }
 
-        private async void SendMessage(TextBox messageInputBox, Message message)
+        private void SendMessage(TextBox messageInputBox, Message message)
         {            
-            // Agregar mensaje al chat usando el servicio (maneja WebSocket automáticamente)
-            await _chatService.AddMessage(_selectedChat.Id, message);
+            // Agregar mensaje al chat usando el servicio
+            _chatService.AddMessage(_selectedChat.Id, message);
             
             // Mostrar en la UI
             AddMessageToUI(message);

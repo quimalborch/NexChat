@@ -353,36 +353,18 @@ namespace NexChat.Services
                 if (sent)
                 {
                     Console.WriteLine($"✓ Message sent to remote chat via WebSocket");
-                    
-                    // IMPORTANTE: Agregar el mensaje localmente también
-                    // Esto hace que el remitente vea su propio mensaje inmediatamente
-                    message.Chat = chat;
-                    chat.Messages.Add(message);
-                    
-                    // Notificar UI para actualizar
-                    ChatListUpdated?.Invoke(this, chats);
-                    
-                    Console.WriteLine($"✓ Message added to local chat (sender's copy)");
+                    // El mensaje se agregará cuando el servidor lo confirme y lo broadcast de vuelta
                 }
                 else
                 {
                     Console.WriteLine($"❌ Failed to send message via WebSocket, falling back to HTTP");
                     // Fallback a HTTP POST si WebSocket falla
-                    bool httpSuccess = await _chatConnectorService.SendMessage(chat.CodeInvitation!, message);
-                    
-                    if (httpSuccess)
-                    {
-                        // Si HTTP funciona, también agregar localmente
-                        message.Chat = chat;
-                        chat.Messages.Add(message);
-                        ChatListUpdated?.Invoke(this, chats);
-                    }
+                    await _chatConnectorService.SendMessage(chat.CodeInvitation!, message);
                 }
             }
             else
             {
                 // Chat local, agregar directamente
-                message.Chat = chat;
                 chat.Messages.Add(message);
                 SaveChats();
                 
