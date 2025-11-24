@@ -187,6 +187,58 @@ namespace NexChat
             {
                 ChatItems.Add(chat);
             }
+            
+            // Si hay un chat seleccionado, verificar si recibió mensajes nuevos
+            if (_selectedChat != null)
+            {
+                var updatedChat = e.FirstOrDefault(c => c.Id == _selectedChat.Id);
+                if (updatedChat != null)
+                {
+                    // Verificar si hay mensajes nuevos
+                    UpdateChatViewIfNeeded(updatedChat);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Actualiza la vista del chat si hay mensajes nuevos
+        /// </summary>
+        private void UpdateChatViewIfNeeded(Chat updatedChat)
+        {
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                var content = this.Content as FrameworkElement;
+                if (content == null) return;
+
+                var messagesPanel = content.FindName("MessagesPanel") as StackPanel;
+                if (messagesPanel == null) return;
+
+                // Obtener IDs de mensajes actuales en la UI
+                var currentMessageIds = new HashSet<string>();
+                foreach (var child in messagesPanel.Children)
+                {
+                    if (child is Grid grid && grid.Tag is string messageId)
+                    {
+                        currentMessageIds.Add(messageId);
+                    }
+                }
+
+                // Agregar solo mensajes nuevos
+                foreach (var message in updatedChat.Messages)
+                {
+                    if (!currentMessageIds.Contains(message.Id))
+                    {
+                        Console.WriteLine($"?? Adding new message to UI: {message.Content}");
+                        AddMessageToUI(message);
+                    }
+                }
+
+                // Auto-scroll al final si hay mensajes nuevos
+                if (updatedChat.Messages.Count > currentMessageIds.Count)
+                {
+                    ScrollToBottom();
+                }
+            });
         }
 
         private ChatService CreateChatService(){
@@ -298,7 +350,8 @@ namespace NexChat
             var messageGrid = new Grid
             {
                 Margin = new Thickness(0, 5, 0, 5),
-                HorizontalAlignment = isMyMessage ? HorizontalAlignment.Right : HorizontalAlignment.Left
+                HorizontalAlignment = isMyMessage ? HorizontalAlignment.Right : HorizontalAlignment.Left,
+                Tag = message.Id // Agregar ID del mensaje para rastreo
             };
 
             // Border para la burbuja del mensaje
