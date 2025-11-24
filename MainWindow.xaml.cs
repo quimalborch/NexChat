@@ -188,13 +188,16 @@ namespace NexChat
                 ChatItems.Add(chat);
             }
             
-            // Si hay un chat seleccionado, verificar si recibió mensajes nuevos
+            // Si hay un chat seleccionado actualmente visible, verificar si necesita actualizarse
             if (_selectedChat != null)
             {
                 var updatedChat = e.FirstOrDefault(c => c.Id == _selectedChat.Id);
-                if (updatedChat != null)
+                if (updatedChat != null && updatedChat.Messages.Count != _selectedChat.Messages.Count)
                 {
-                    // Verificar si hay mensajes nuevos
+                    Console.WriteLine($"?? Chat '{updatedChat.Name}' has new messages, updating UI...");
+                    // Actualizar la referencia del chat seleccionado
+                    _selectedChat = updatedChat;
+                    // Actualizar la vista
                     UpdateChatViewIfNeeded(updatedChat);
                 }
             }
