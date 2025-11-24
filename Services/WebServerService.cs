@@ -1,6 +1,7 @@
 ﻿using NexChat.Data;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
@@ -405,6 +406,49 @@ namespace NexChat.Services
                         }
 
                         break;
+
+                    case "/chat/getnewmessages":
+                        if (_chatId is null)
+                        {
+                            responseString = "ChatId not set";
+                            response.StatusCode = 400;
+                            Console.WriteLine("? ChatId not set for /chat/getNewMessages");
+                            break;
+                        }
+
+                        // Obtener el timestamp desde los query parameters
+                        string? timestampStr = request.QueryString["since"];
+                        DateTime since = DateTime.MinValue;
+                        
+                        if (!string.IsNullOrEmpty(timestampStr) && long.TryParse(timestampStr, out long ticks))
+                        {
+                            since = new DateTime(ticks, DateTimeKind.Utc);
+                        }
+
+                        Console.WriteLine($"? Requesting new messages since: {since}");
+
+                        Chat? chatData = ChatListUpdated?.Invoke(_chatId);
+                        if (chatData != null)
+                        {
+                            // Filtrar solo mensajes más nuevos que el timestamp
+                            var newMessages = chatData.Messages
+                                .Where(m => m.Timestamp > since)
+                                .OrderBy(m => m.Timestamp)
+                                .ToList();
+
+                            responseString = System.Text.Json.JsonSerializer.Serialize(newMessages);
+                            response.StatusCode = 200;
+                            Console.WriteLine($"? Responding with {newMessages.Count} new messages");
+                        }
+                        else
+                        {
+                            responseString = "Chat not found";
+                            response.StatusCode = 404;
+                            Console.WriteLine("? Chat not found for /chat/getNewMessages");
+                        }
+
+                        break;
+
                     case "/chat/sendmessage":
                         if (_chatId is null) 
                         {
