@@ -462,7 +462,7 @@ namespace NexChat
             }
         }
 
-        private void SendMessageExternal(TextBox messageInputBox, Message message)
+        private async void SendMessageExternal(TextBox messageInputBox, Message message)
         {
             if (_selectedChat.CodeInvitation is null)
             {
@@ -474,7 +474,7 @@ namespace NexChat
                     XamlRoot = this.Content.XamlRoot
                 };
 
-                Task.Run(() => dialog.ShowAsync());
+                await dialog.ShowAsync();
                 return;
             }
 
