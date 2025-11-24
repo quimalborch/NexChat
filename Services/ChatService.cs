@@ -381,14 +381,26 @@ namespace NexChat.Services
             try
             {
                 Chat? chat = GetChatById(chatId);
-                if (chat is null) return;
+                if (chat is null) 
+                {
+                    Console.WriteLine($"❌ Chat not found for ID: {chatId}");
+                    return;
+                }
 
+                // IMPORTANTE: Asignar el Chat al mensaje
+                // Esto es necesario porque al deserializar JSON, la propiedad Chat (marcada con JsonIgnore) es null
+                message.Chat = chat;
+                
+                Console.WriteLine($"📥 Receiving message for chat '{chat.Name}': {message.Content}");
+                
                 chat.Messages.Add(message);
                 SaveChats();
+                
+                Console.WriteLine($"✓ Message added to chat '{chat.Name}' (Total messages: {chat.Messages.Count})");
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.Message);
+                Console.WriteLine($"❌ Error in ReceiveMessage: {ex.Message}");
             }
         }
 

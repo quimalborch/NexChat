@@ -682,7 +682,7 @@ namespace NexChat.Services
 
                         Console.WriteLine($"📩 Received message to send: {requestBody}");
 
-                        // passar a json a clase Message
+                        // Deserializar JSON a clase Message
                         Message? newMessage = null;
                         try
                         {
@@ -694,11 +694,17 @@ namespace NexChat.Services
                                 break;
                             }
 
-                            // Aquí podrías agregar lógica para almacenar el mensaje o procesarlo según sea necesario
                             Console.WriteLine($"📝 Message deserialized successfully: {newMessage.Content}");
+                            Console.WriteLine($"📝 Message ID: {newMessage.Id}, Sender: {newMessage.Sender?.Name ?? "Unknown"}");
+                            
+                            // Invocar el evento para crear el mensaje
+                            // El handler (ReceiveMessage en ChatService) asignará el Chat correctamente
                             bool? _CreateMessage = CreateMessage?.Invoke(_chatId, newMessage);
+                            
                             if (_CreateMessage == true)
                             {
+                                Console.WriteLine($"✓ Message created and stored successfully");
+                                
                                 // Broadcast el mensaje a todos los clientes WebSocket conectados
                                 await BroadcastMessage(newMessage);
                                 
@@ -707,6 +713,7 @@ namespace NexChat.Services
                             }
                             else
                             {
+                                Console.WriteLine($"❌ Failed to create message in chat service");
                                 responseString = "Failed to create message";
                                 response.StatusCode = 500;
                             }
