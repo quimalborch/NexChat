@@ -158,12 +158,20 @@
                                         <MenuFlyoutSeparator/>
                                         <MenuFlyoutItem Text="Editar" 
                                                         Click="EditChat_Click" 
-                                                        Tag="{x:Bind Id}"/>
+                                                        Tag="{x:Bind Id}">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon Glyph="&#xE70F;"/>
+                                            </MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
                                         <MenuFlyoutSeparator/>
                                         <MenuFlyoutItem Text="Eliminar" 
                                                         Click="DeleteChat_Click" 
                                                         Tag="{x:Bind Id}"
-                                                        Foreground="PaleVioletRed"/>
+                                                        Foreground="PaleVioletRed">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon Glyph="&#xE74D;"/>
+                                            </MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
                                     </MenuFlyout>
                                 </FlyoutBase.AttachedFlyout>
                                 <StackPanel Orientation="Vertical" Spacing="4">
