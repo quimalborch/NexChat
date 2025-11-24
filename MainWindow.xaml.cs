@@ -683,5 +683,10 @@ namespace NexChat
                 }
             }
         }
+
+        private void BtnConfig_Click(object sender, RoutedEventArgs e)
+        {
+
+        }
     }
 }

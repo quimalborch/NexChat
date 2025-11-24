@@ -21,12 +21,15 @@
 
         <!-- NavBar -->
         <Grid Grid.Row="0" 
-              Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+             Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
               Padding="20,10"
               BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
               BorderThickness="0,0,0,1">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
@@ -43,16 +46,59 @@
                     Click="CloudflareUpdateButton_Click"
                     Height="36"
                     VerticalAlignment="Center"
-                    CornerRadius="6">
+                    CornerRadius="6"
+                    Margin="4">
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <FontIcon Glyph="&#xE896;" FontSize="14"/>
                     <TextBlock x:Name="CloudflareButtonText" Text="Cloudflare" FontSize="13"/>
                 </StackPanel>
             </Button>
+            <Button x:Name="BtnCrearChat"
+                    Grid.Column="2"
+                    Click="BtnCrearNuevoChat_Click"
+                    Height="36"
+                    VerticalAlignment="Center"
+                    CornerRadius="6"
+                    Margin="4">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <FontIcon Glyph="&#xED0E;" FontSize="14"/>
+                </StackPanel>
+                <ToolTipService.ToolTip>
+                    <ToolTip VerticalOffset="-60" Content="Crear nuevo chat"/>
+                </ToolTipService.ToolTip>
+            </Button>
+            <Button x:Name="BtnUnirChat"
+                    Grid.Column="3"
+                    Click="BtnUnirseNuevoChat_Click"
+                    Height="36"
+                    VerticalAlignment="Center"
+                    CornerRadius="6"
+                    Margin="4">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <FontIcon Glyph="&#xF716;" FontSize="14"/>
+                </StackPanel>
+                <ToolTipService.ToolTip>
+                    <ToolTip VerticalOffset="-60" Content="Unirse a un nuevo chat"/>
+                </ToolTipService.ToolTip>
+            </Button>
+            <Button x:Name="BtnConfig"
+                    Grid.Column="4"
+                    Click="BtnConfig_Click"
+                    Height="36"
+                    VerticalAlignment="Center"
+                    CornerRadius="6"
+                    Margin="4">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <FontIcon Glyph="&#xE713;" FontSize="14"/>
+                </StackPanel>
+                <ToolTipService.ToolTip>
+                    <ToolTip VerticalOffset="-60" Content="Abrir configuración"/>
+                </ToolTipService.ToolTip>
+            </Button>
         </Grid>
 
         <!-- Contenido principal -->
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="1" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="1*"/>
                 <ColumnDefinition Width="3*"/>
@@ -67,18 +113,6 @@
 
                 <!-- Header with Create Chat Button -->
                 <StackPanel Grid.Row="0" Orientation="Vertical" Spacing="10">
-                    <Button x:Name="BtnCrearNuevoChat" 
-                            Content="Crear Chat" 
-                            HorizontalAlignment="Stretch"
-                            Height="40" 
-                            Click="BtnCrearNuevoChat_Click"
-                            CornerRadius="8"/>
-                    <Button x:Name="BtnUnirseNuevoChat" 
-                            Content="Conectar a Chat" 
-                            HorizontalAlignment="Stretch"
-                            Height="40" 
-                            Click="BtnUnirseNuevoChat_Click"
-                            CornerRadius="8"/>
                     <TextBlock Text="Mis Chats" 
                                FontSize="20" 
                                FontWeight="Bold"
