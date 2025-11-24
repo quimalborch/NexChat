@@ -18,10 +18,8 @@ namespace NexChat.Services
         private CloudflaredService _cloudflaredService;
         private ChatConnectorService _chatConnectorService;
         
-        // Polling para chats remotos
-        private Dictionary<string, DateTime> _lastPollTimestamps = new Dictionary<string, DateTime>();
-        private Dictionary<string, CancellationTokenSource> _pollingCancellationTokens = new Dictionary<string, CancellationTokenSource>();
-        private const int POLLING_INTERVAL_MS = 2000; // Polling cada 2 segundos
+        // WebSocket connections para chats remotos
+        private Dictionary<string, ChatWebSocketService> _webSocketConnections = new Dictionary<string, ChatWebSocketService>();
 
         public ChatService(CloudflaredService cloudflaredService, ChatConnectorService chatConnectorService) 
         {
@@ -83,6 +81,14 @@ namespace NexChat.Services
                         Console.WriteLine($"Error al restaurar servidor web para chat '{chat.Name}'");
                     }
                 }
+                
+                // Reconectar chats remotos vía WebSocket
+                var remoteChats = chats.Where(c => c.IsInvited && !string.IsNullOrEmpty(c.CodeInvitation)).ToList();
+                foreach (var chat in remoteChats)
+                {
+                    Console.WriteLine($"Reconectando WebSocket para chat remoto '{chat.Name}'...");
+                    await ConnectWebSocketForRemoteChat(chat.Id);
+                }
             }
             catch (Exception ex)
             {
@@ -126,130 +132,120 @@ namespace NexChat.Services
 
             chatRemoto.IsInvited = true;
             chatRemoto.CodeInvitation = Name;
+            
+            // Copiar mensajes iniciales del chat recuperado
+            foreach (var msg in chatRecuperado.Messages)
+            {
+                msg.Chat = chatRemoto;
+                chatRemoto.Messages.Add(msg);
+            }
+            
             chats.Add(chatRemoto);
             SaveChats();
             
-            // Iniciar polling para este chat remoto
-            StartPollingForRemoteChat(chatRemoto.Id);
+            // Conectar WebSocket para recibir actualizaciones en tiempo real
+            await ConnectWebSocketForRemoteChat(chatRemoto.Id);
 
             return true;
         }
 
         /// <summary>
-        /// Inicia el polling para un chat remoto
+        /// Conecta un WebSocket para un chat remoto
         /// </summary>
-        private void StartPollingForRemoteChat(string chatId)
+        private async Task<bool> ConnectWebSocketForRemoteChat(string chatId)
         {
             var chat = GetChatById(chatId);
             if (chat == null || !chat.IsInvited || string.IsNullOrEmpty(chat.CodeInvitation))
-                return;
+                return false;
 
-            // Si ya existe un polling activo, detenerlo primero
-            StopPollingForRemoteChat(chatId);
+            // Si ya existe una conexión, desconectarla primero
+            await DisconnectWebSocketForRemoteChat(chatId);
 
-            // Inicializar el timestamp con el último mensaje o DateTime.UtcNow
-            var lastMessage = chat.Messages.OrderByDescending(m => m.Timestamp).FirstOrDefault();
-            _lastPollTimestamps[chatId] = lastMessage?.Timestamp ?? DateTime.UtcNow;
-
-            // Crear token de cancelación
-            var cancellationTokenSource = new CancellationTokenSource();
-            _pollingCancellationTokens[chatId] = cancellationTokenSource;
-
-            Console.WriteLine($"? Starting polling for remote chat '{chat.Name}' (ID: {chatId})");
-
-            // Iniciar tarea de polling
-            _ = Task.Run(async () => await PollRemoteChatAsync(chatId, cancellationTokenSource.Token));
-        }
-
-        /// <summary>
-        /// Detiene el polling para un chat remoto
-        /// </summary>
-        private void StopPollingForRemoteChat(string chatId)
-        {
-            if (_pollingCancellationTokens.TryGetValue(chatId, out var cts))
+            try
             {
-                cts.Cancel();
-                cts.Dispose();
-                _pollingCancellationTokens.Remove(chatId);
-                Console.WriteLine($"? Stopped polling for chat ID: {chatId}");
+                // Crear servicio WebSocket
+                var wsService = new ChatWebSocketService();
+                
+                // Suscribirse a eventos
+                wsService.MessageReceived += (sender, message) =>
+                {
+                    OnWebSocketMessageReceived(chatId, message);
+                };
+                
+                wsService.ConnectionStatusChanged += (sender, status) =>
+                {
+                    Console.WriteLine($"🔌 WebSocket status for chat '{chat.Name}': {status}");
+                };
+
+                // Conectar
+                string url = $"https://{chat.CodeInvitation}.trycloudflare.com";
+                bool connected = await wsService.ConnectAsync(url, chatId);
+
+                if (connected)
+                {
+                    _webSocketConnections[chatId] = wsService;
+                    Console.WriteLine($"✓ WebSocket connected for remote chat '{chat.Name}'");
+                    return true;
+                }
+                else
+                {
+                    Console.WriteLine($"❌ Failed to connect WebSocket for chat '{chat.Name}'");
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error connecting WebSocket for chat {chatId}: {ex.Message}");
+                return false;
             }
         }
 
         /// <summary>
-        /// Tarea de polling que consulta periódicamente mensajes nuevos
+        /// Desconecta el WebSocket de un chat remoto
         /// </summary>
-        private async Task PollRemoteChatAsync(string chatId, CancellationToken cancellationToken)
+        private async Task DisconnectWebSocketForRemoteChat(string chatId)
         {
-            while (!cancellationToken.IsCancellationRequested)
+            if (_webSocketConnections.TryGetValue(chatId, out var wsService))
             {
-                try
+                await wsService.DisconnectAsync();
+                _webSocketConnections.Remove(chatId);
+                Console.WriteLine($"🔌 WebSocket disconnected for chat {chatId}");
+            }
+        }
+
+        /// <summary>
+        /// Maneja mensajes recibidos por WebSocket
+        /// </summary>
+        private void OnWebSocketMessageReceived(string chatId, Message message)
+        {
+            try
+            {
+                var chat = GetChatById(chatId);
+                if (chat == null)
+                    return;
+
+                Console.WriteLine($"📩 New message received via WebSocket for chat '{chat.Name}': {message.Content}");
+
+                // Verificar que el mensaje no exista ya (evitar duplicados)
+                if (!chat.Messages.Any(m => m.Id == message.Id))
                 {
-                    var chat = GetChatById(chatId);
-                    if (chat == null || !chat.IsInvited || string.IsNullOrEmpty(chat.CodeInvitation))
-                    {
-                        Console.WriteLine($"? Chat {chatId} no longer valid for polling, stopping...");
-                        break;
-                    }
-
-                    // Obtener el último timestamp conocido
-                    DateTime lastTimestamp = _lastPollTimestamps.ContainsKey(chatId)
-                        ? _lastPollTimestamps[chatId]
-                        : DateTime.UtcNow;
-
-                    // Consultar mensajes nuevos
-                    var newMessages = await _chatConnectorService.GetNewMessages(chat.CodeInvitation, lastTimestamp);
-
-                    if (newMessages != null && newMessages.Count > 0)
-                    {
-                        Console.WriteLine($"? Received {newMessages.Count} new messages for chat '{chat.Name}'");
-
-                        // Agregar los mensajes nuevos al chat
-                        foreach (var message in newMessages)
-                        {
-                            message.Chat = chat;
-                            chat.Messages.Add(message);
-                            
-                            // Actualizar el último timestamp
-                            if (message.Timestamp > lastTimestamp)
-                            {
-                                lastTimestamp = message.Timestamp;
-                            }
-                        }
-
-                        // Guardar el nuevo timestamp
-                        _lastPollTimestamps[chatId] = lastTimestamp;
-
-                        // Guardar cambios y notificar
-                        SaveChats();
-                        
-                        Console.WriteLine($"? Chat '{chat.Name}' updated with new messages");
-                    }
-
-                    // Esperar antes del siguiente poll
-                    await Task.Delay(POLLING_INTERVAL_MS, cancellationToken);
-                }
-                catch (OperationCanceledException)
-                {
-                    // Polling cancelado, salir del loop
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"? Error in polling for chat {chatId}: {ex.Message}");
+                    message.Chat = chat;
+                    chat.Messages.Add(message);
                     
-                    // Esperar un poco más en caso de error antes de reintentar
-                    try
-                    {
-                        await Task.Delay(POLLING_INTERVAL_MS * 2, cancellationToken);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        break;
-                    }
+                    // Notificar a la UI
+                    ChatListUpdated?.Invoke(this, chats);
+                    
+                    Console.WriteLine($"✓ Message added to chat '{chat.Name}'");
+                }
+                else
+                {
+                    Console.WriteLine($"⚠️ Duplicate message ignored: {message.Id}");
                 }
             }
-
-            Console.WriteLine($"? Polling task ended for chat {chatId}");
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error processing WebSocket message: {ex.Message}");
+            }
         }
 
         public void CreateChat(string Name)
@@ -264,15 +260,30 @@ namespace NexChat.Services
         {
             try
             {
+                // Crear una copia temporal para serializar sin mensajes de chats remotos
+                var chatsToSave = new List<Chat>();
+                
                 foreach (Chat _chat in chats)
                 {
-                    if (_chat.IsInvited)
+                    var chatCopy = new Chat(_chat.Name)
                     {
-                        _chat.Messages = new List<Message>();
+                        Id = _chat.Id,
+                        CodeInvitation = _chat.CodeInvitation,
+                        IsInvited = _chat.IsInvited,
+                        IsRunning = _chat.IsRunning,
+                        ServerPort = _chat.ServerPort
+                    };
+                    
+                    // Solo guardar mensajes de chats locales
+                    if (!_chat.IsInvited)
+                    {
+                        chatCopy.Messages = _chat.Messages;
                     }
+                    
+                    chatsToSave.Add(chatCopy);
                 }
 
-                string? conteindoJSONChats = System.Text.Json.JsonSerializer.Serialize(chats);
+                string? conteindoJSONChats = System.Text.Json.JsonSerializer.Serialize(chatsToSave);
 
                 if (string.IsNullOrEmpty(conteindoJSONChats))
                     return;
@@ -299,15 +310,21 @@ namespace NexChat.Services
             SaveChats();
         }
 
-        public void DeleteChat(string chatId)
+        public async Task DeleteChat(string chatId)
         {
             Chat? chat = chats.FirstOrDefault(c => c.Id == chatId);
             if (chat is null) return;
             
-            // Detener polling si es un chat remoto
+            // Desconectar WebSocket si es un chat remoto
             if (chat.IsInvited)
             {
-                StopPollingForRemoteChat(chatId);
+                await DisconnectWebSocketForRemoteChat(chatId);
+            }
+            
+            // Detener servidor web si es un chat local
+            if (chat.IsRunning)
+            {
+                await StopWebServer(chatId);
             }
             
             chats.Remove(chat);
@@ -324,23 +341,45 @@ namespace NexChat.Services
             return chats.FirstOrDefault(c => c.Id == chatId);
         }
 
-        public void AddMessage(string chatId, Message message)
+        public async Task AddMessage(string chatId, Message message)
         {
-            //TODO: Implementar lógica de envío de mensaje a través de red/servidor
-            // Por ahora solo agregamos el mensaje localmente
             Chat? chat = GetChatById(chatId);
             if (chat is null) return;
             
-            chat.Messages.Add(message);
-            SaveChats();
+            // Si es un chat remoto, enviar mensaje por WebSocket
+            if (chat.IsInvited && _webSocketConnections.TryGetValue(chatId, out var wsService))
+            {
+                bool sent = await wsService.SendMessageAsync(message);
+                if (sent)
+                {
+                    Console.WriteLine($"✓ Message sent to remote chat via WebSocket");
+                    // El mensaje se agregará cuando el servidor lo confirme y lo broadcast de vuelta
+                }
+                else
+                {
+                    Console.WriteLine($"❌ Failed to send message via WebSocket, falling back to HTTP");
+                    // Fallback a HTTP POST si WebSocket falla
+                    await _chatConnectorService.SendMessage(chat.CodeInvitation!, message);
+                }
+            }
+            else
+            {
+                // Chat local, agregar directamente
+                chat.Messages.Add(message);
+                SaveChats();
+                
+                // Si el chat tiene un servidor web activo, broadcast a los clientes conectados
+                if (_webServers.TryGetValue(chatId, out var webServer))
+                {
+                    await webServer.BroadcastMessage(message);
+                }
+            }
         }
 
         public void ReceiveMessage(string chatId, Message message)
         {
             try
             {
-                //TODO: Implementar lógica para recibir mensajes desde red/servidor
-                // Este método se llamaría cuando llegue un mensaje nuevo de otro usuario
                 Chat? chat = GetChatById(chatId);
                 if (chat is null) return;
 
@@ -359,7 +398,7 @@ namespace NexChat.Services
             if (chat is null || chat.IsRunning) 
                 return false;
 
-            // Crear y arrancar el servidor web con soporte de túnel
+            // Crear y arrancar el servidor web con soporte de túnel y WebSocket
             WebServerService webServer = new WebServerService(_cloudflaredService);
             webServer.ChatListUpdated += WebServer_ChatListUpdated;
             webServer.CreateMessage += WebServer_CreateMessage;
@@ -372,10 +411,12 @@ namespace NexChat.Services
                 SaveChats();
                 
                 Console.WriteLine($"Web server started for chat '{chat.Name}' on port {webServer.Port}");
+                Console.WriteLine($"WebSocket available at: ws://localhost:{webServer.Port}/ws");
                 
                 if (enableTunnel && webServer.IsTunnelActive)
                 {
                     Console.WriteLine($"Cloudflare tunnel active: {webServer.TunnelUrl}");
+                    Console.WriteLine($"WebSocket via tunnel: wss://{GetSubdomain(webServer.TunnelUrl)}.trycloudflare.com/ws");
                 }
                 
                 return true;
@@ -490,6 +531,20 @@ namespace NexChat.Services
                 return webServer.IsTunnelActive;
             }
             return false;
+        }
+        
+        public bool IsWebSocketConnected(string chatId)
+        {
+            return _webSocketConnections.TryGetValue(chatId, out var ws) && ws.IsConnected;
+        }
+
+        public int GetConnectedClientsCount(string chatId)
+        {
+            if (_webServers.TryGetValue(chatId, out var webServer))
+            {
+                return webServer.ConnectedClientsCount;
+            }
+            return 0;
         }
     }
 }

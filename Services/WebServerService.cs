@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
+using System.Net.WebSockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,6 +20,10 @@ namespace NexChat.Services
         private CloudflaredService? _cloudflaredService;
         private string? _chatId;
         
+        // WebSocket connections management
+        private List<WebSocket> _connectedClients = new List<WebSocket>();
+        private readonly object _clientsLock = new object();
+        
         public int Port { get; private set; }
         public bool IsRunning => _listener?.IsListening ?? false;
         public string? TunnelUrl { get; private set; }
@@ -30,6 +35,16 @@ namespace NexChat.Services
         public delegate bool CreateMessageHandler(string chatId, Message message);
         public event CreateMessageHandler CreateMessage;
 
+        public int ConnectedClientsCount 
+        { 
+            get 
+            { 
+                lock (_clientsLock) 
+                { 
+                    return _connectedClients.Count(ws => ws.State == WebSocketState.Open); 
+                } 
+            } 
+        }
 
         public WebServerService(CloudflaredService? cloudflaredService = null)
         {
@@ -74,6 +89,7 @@ namespace NexChat.Services
                     Console.WriteLine($"✓ HttpListener started successfully on port {Port}");
                     Console.WriteLine($"✓ IsListening: {_listener.IsListening}");
                     Console.WriteLine($"✓ Server URL: http://localhost:{Port}/");
+                    Console.WriteLine($"✓ WebSocket URL: ws://localhost:{Port}/ws");
                     
                     // Iniciar tarea para escuchar peticiones
                     _listenerTask = Task.Run(() => HandleIncomingConnections(_cancellationTokenSource.Token));
@@ -269,6 +285,9 @@ namespace NexChat.Services
 
             try
             {
+                // Cerrar todas las conexiones WebSocket
+                await CloseAllWebSocketConnections();
+
                 // Cerrar túnel si está activo
                 if (IsTunnelActive)
                 {
@@ -298,6 +317,32 @@ namespace NexChat.Services
             }
         }
 
+        private async Task CloseAllWebSocketConnections()
+        {
+            List<WebSocket> clientsToClose;
+            lock (_clientsLock)
+            {
+                clientsToClose = new List<WebSocket>(_connectedClients);
+                _connectedClients.Clear();
+            }
+
+            foreach (var client in clientsToClose)
+            {
+                try
+                {
+                    if (client.State == WebSocketState.Open)
+                    {
+                        await client.CloseAsync(WebSocketCloseStatus.NormalClosure, "Server shutting down", CancellationToken.None);
+                    }
+                    client.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error closing WebSocket: {ex.Message}");
+                }
+            }
+        }
+
         private async Task HandleIncomingConnections(CancellationToken cancellationToken)
         {
             Console.WriteLine("HandleIncomingConnections task started");
@@ -311,20 +356,39 @@ namespace NexChat.Services
                     
                     if (!cancellationToken.IsCancellationRequested)
                     {
-                        Console.WriteLine($"? Request received: {context.Request.HttpMethod} {context.Request.Url}");
+                        Console.WriteLine($"📨 Request received: {context.Request.HttpMethod} {context.Request.Url}");
                         
-                        // Procesar la petición sin esperar (fire and forget para no bloquear)
-                        _ = Task.Run(async () => 
+                        // Verificar si es una petición de WebSocket
+                        if (context.Request.IsWebSocketRequest)
                         {
-                            try
+                            // Procesar WebSocket connection
+                            _ = Task.Run(async () =>
                             {
-                                await ProcessRequest(context);
-                            }
-                            catch (Exception ex)
+                                try
+                                {
+                                    await HandleWebSocketConnection(context);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($"Error handling WebSocket: {ex.Message}");
+                                }
+                            }, cancellationToken);
+                        }
+                        else
+                        {
+                            // Procesar petición HTTP normal
+                            _ = Task.Run(async () => 
                             {
-                                Console.WriteLine($"Error processing request: {ex.Message}");
-                            }
-                        }, cancellationToken);
+                                try
+                                {
+                                    await ProcessRequest(context);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($"Error processing request: {ex.Message}");
+                                }
+                            }, cancellationToken);
+                        }
                     }
                 }
                 catch (HttpListenerException hlex)
@@ -352,6 +416,157 @@ namespace NexChat.Services
             Console.WriteLine("HandleIncomingConnections task ended");
         }
 
+        private async Task HandleWebSocketConnection(HttpListenerContext context)
+        {
+            WebSocket? webSocket = null;
+            try
+            {
+                Console.WriteLine($"🔌 WebSocket connection request from {context.Request.RemoteEndPoint}");
+                
+                // Aceptar la conexión WebSocket
+                var webSocketContext = await context.AcceptWebSocketAsync(null);
+                webSocket = webSocketContext.WebSocket;
+                
+                // Agregar a la lista de clientes conectados
+                lock (_clientsLock)
+                {
+                    _connectedClients.Add(webSocket);
+                }
+                
+                Console.WriteLine($"✓ WebSocket connected. Total clients: {ConnectedClientsCount}");
+                
+                // Buffer para recibir mensajes
+                var buffer = new byte[4096];
+                
+                // Bucle para recibir mensajes del cliente
+                while (webSocket.State == WebSocketState.Open)
+                {
+                    var result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+                    
+                    if (result.MessageType == WebSocketMessageType.Close)
+                    {
+                        Console.WriteLine($"🔌 WebSocket close requested by client");
+                        await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None);
+                        break;
+                    }
+                    else if (result.MessageType == WebSocketMessageType.Text)
+                    {
+                        var messageText = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                        Console.WriteLine($"📩 WebSocket message received: {messageText}");
+                        
+                        // Procesar el mensaje recibido
+                        await ProcessWebSocketMessage(webSocket, messageText);
+                    }
+                }
+            }
+            catch (WebSocketException wsex)
+            {
+                Console.WriteLine($"WebSocket error: {wsex.Message}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in WebSocket handler: {ex.Message}");
+            }
+            finally
+            {
+                // Remover de la lista de clientes
+                if (webSocket != null)
+                {
+                    lock (_clientsLock)
+                    {
+                        _connectedClients.Remove(webSocket);
+                    }
+                    
+                    if (webSocket.State == WebSocketState.Open)
+                    {
+                        try
+                        {
+                            await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Connection closed", CancellationToken.None);
+                        }
+                        catch { }
+                    }
+                    
+                    webSocket.Dispose();
+                    Console.WriteLine($"🔌 WebSocket disconnected. Total clients: {ConnectedClientsCount}");
+                }
+            }
+        }
+
+        private async Task ProcessWebSocketMessage(WebSocket webSocket, string messageText)
+        {
+            try
+            {
+                // Intentar deserializar como Message
+                var message = System.Text.Json.JsonSerializer.Deserialize<Message>(messageText);
+                
+                if (message != null && !string.IsNullOrEmpty(_chatId))
+                {
+                    Console.WriteLine($"📨 Processing message from WebSocket: {message.Content}");
+                    
+                    // Invocar el evento para crear el mensaje
+                    bool? created = CreateMessage?.Invoke(_chatId, message);
+                    
+                    if (created == true)
+                    {
+                        Console.WriteLine($"✓ Message created successfully");
+                        
+                        // Broadcast el mensaje a todos los clientes conectados
+                        await BroadcastMessage(message);
+                        
+                        // Enviar confirmación al cliente
+                        var response = new { type = "message_created", success = true, messageId = message.Id };
+                        await SendWebSocketMessage(webSocket, System.Text.Json.JsonSerializer.Serialize(response));
+                    }
+                    else
+                    {
+                        var response = new { type = "error", message = "Failed to create message" };
+                        await SendWebSocketMessage(webSocket, System.Text.Json.JsonSerializer.Serialize(response));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error processing WebSocket message: {ex.Message}");
+                var response = new { type = "error", message = ex.Message };
+                await SendWebSocketMessage(webSocket, System.Text.Json.JsonSerializer.Serialize(response));
+            }
+        }
+
+        /// <summary>
+        /// Envía un mensaje a un cliente WebSocket específico
+        /// </summary>
+        private async Task SendWebSocketMessage(WebSocket webSocket, string message)
+        {
+            if (webSocket.State == WebSocketState.Open)
+            {
+                var buffer = Encoding.UTF8.GetBytes(message);
+                await webSocket.SendAsync(new ArraySegment<byte>(buffer), WebSocketMessageType.Text, true, CancellationToken.None);
+            }
+        }
+
+        /// <summary>
+        /// Broadcast un mensaje a todos los clientes conectados
+        /// </summary>
+        public async Task BroadcastMessage(Message message)
+        {
+            var messageJson = System.Text.Json.JsonSerializer.Serialize(new 
+            { 
+                type = "new_message", 
+                message = message 
+            });
+            
+            List<WebSocket> clients;
+            lock (_clientsLock)
+            {
+                clients = _connectedClients.Where(ws => ws.State == WebSocketState.Open).ToList();
+            }
+            
+            Console.WriteLine($"📢 Broadcasting message to {clients.Count} connected clients");
+            
+            var tasks = clients.Select(client => SendWebSocketMessage(client, messageJson));
+            await Task.WhenAll(tasks);
+        }
+
         private async Task ProcessRequest(HttpListenerContext context)
         {
             HttpListenerRequest request = context.Request;
@@ -373,13 +588,13 @@ namespace NexChat.Services
                     case "/":
                         responseString = $"NexChat WebServer is running! Call Id: {Guid.NewGuid().ToString()}";
                         response.StatusCode = 200;
-                        Console.WriteLine("? Responding to root path");
+                        Console.WriteLine("📝 Responding to root path");
                         break;
                         
                     case "/ping":
                         responseString = "pong";
                         response.StatusCode = 200;
-                        Console.WriteLine("? Responding to /ping with pong");
+                        Console.WriteLine("📝 Responding to /ping with pong");
                         break;
 
                     case "/chat/getchat":
@@ -387,7 +602,7 @@ namespace NexChat.Services
                         {
                             responseString = "ChatId not set";
                             response.StatusCode = 400;
-                            Console.WriteLine("? ChatId not set for /chat/getChat");
+                            Console.WriteLine("❌ ChatId not set for /chat/getChat");
                             break;
                         }
 
@@ -396,13 +611,13 @@ namespace NexChat.Services
                         {
                             responseString = System.Text.Json.JsonSerializer.Serialize(respuesta);
                             response.StatusCode = 200;
-                            Console.WriteLine("? Responding to /chat/getChat with chat data");
+                            Console.WriteLine("📝 Responding to /chat/getChat with chat data");
                         }
                         else
                         {
                             responseString = "Chat not found";
                             response.StatusCode = 404;
-                            Console.WriteLine("? Chat not found for /chat/getChat");
+                            Console.WriteLine("❌ Chat not found for /chat/getChat");
                         }
 
                         break;
@@ -412,7 +627,7 @@ namespace NexChat.Services
                         {
                             responseString = "ChatId not set";
                             response.StatusCode = 400;
-                            Console.WriteLine("? ChatId not set for /chat/getNewMessages");
+                            Console.WriteLine("❌ ChatId not set for /chat/getNewMessages");
                             break;
                         }
 
@@ -425,7 +640,7 @@ namespace NexChat.Services
                             since = new DateTime(ticks, DateTimeKind.Utc);
                         }
 
-                        Console.WriteLine($"? Requesting new messages since: {since}");
+                        Console.WriteLine($"📝 Requesting new messages since: {since}");
 
                         Chat? chatData = ChatListUpdated?.Invoke(_chatId);
                         if (chatData != null)
@@ -438,13 +653,13 @@ namespace NexChat.Services
 
                             responseString = System.Text.Json.JsonSerializer.Serialize(newMessages);
                             response.StatusCode = 200;
-                            Console.WriteLine($"? Responding with {newMessages.Count} new messages");
+                            Console.WriteLine($"📝 Responding with {newMessages.Count} new messages");
                         }
                         else
                         {
                             responseString = "Chat not found";
                             response.StatusCode = 404;
-                            Console.WriteLine("? Chat not found for /chat/getNewMessages");
+                            Console.WriteLine("❌ Chat not found for /chat/getNewMessages");
                         }
 
                         break;
@@ -454,7 +669,7 @@ namespace NexChat.Services
                         {
                             responseString = "ChatId not set";
                             response.StatusCode = 400;
-                            Console.WriteLine("? ChatId not set for /chat/getChat");
+                            Console.WriteLine("❌ ChatId not set for /chat/sendMessage");
                             break;
                         }
 
@@ -465,7 +680,7 @@ namespace NexChat.Services
                             requestBody = await reader.ReadToEndAsync();
                         }
 
-                        Console.WriteLine($"? Received message to send: {requestBody}");
+                        Console.WriteLine($"📩 Received message to send: {requestBody}");
 
                         // passar a json a clase Message
                         Message? newMessage = null;
@@ -480,10 +695,13 @@ namespace NexChat.Services
                             }
 
                             // Aquí podrías agregar lógica para almacenar el mensaje o procesarlo según sea necesario
-                            Console.WriteLine($"? Message deserialized successfully: {newMessage.Content}");
+                            Console.WriteLine($"📝 Message deserialized successfully: {newMessage.Content}");
                             bool? _CreateMessage = CreateMessage?.Invoke(_chatId, newMessage);
                             if (_CreateMessage == true)
                             {
+                                // Broadcast el mensaje a todos los clientes WebSocket conectados
+                                await BroadcastMessage(newMessage);
+                                
                                 responseString = "Message created successfully";
                                 response.StatusCode = 200;
                             }
@@ -495,21 +713,18 @@ namespace NexChat.Services
                         }
                         catch (Exception ex)
                         {
-                            Console.WriteLine($"? Error deserializing message: {ex.Message}");
+                            Console.WriteLine($"❌ Error deserializing message: {ex.Message}");
                             responseString = "Invalid message format";
                             response.StatusCode = 400;
                             break;
                         }
 
-                        responseString = "Message received";
-                        response.StatusCode = 200;
-                        Console.WriteLine("? Responding to /chat/sendMessage");
                         break;
 
                     default:
                         responseString = $"NexChat WebServer - Unknown endpoint: {request.Url?.AbsolutePath}";
                         response.StatusCode = 404;
-                        Console.WriteLine($"? Unknown endpoint: {request.Url?.AbsolutePath}");
+                        Console.WriteLine($"❌ Unknown endpoint: {request.Url?.AbsolutePath}");
                         break;
                 }
 
@@ -527,11 +742,11 @@ namespace NexChat.Services
                 await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
                 await response.OutputStream.FlushAsync();
                 
-                Console.WriteLine($"? Response sent: {response.StatusCode} ({buffer.Length} bytes)");
+                Console.WriteLine($"✓ Response sent: {response.StatusCode} ({buffer.Length} bytes)");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"? Error in ProcessRequest: {ex.Message}");
+                Console.WriteLine($"❌ Error in ProcessRequest: {ex.Message}");
                 response.StatusCode = 500;
             }
             finally
@@ -567,7 +782,7 @@ namespace NexChat.Services
         {
             if (!IsRunning)
             {
-                Console.WriteLine("? Cannot test: Server is not running");
+                Console.WriteLine("❌ Cannot test: Server is not running");
                 return false;
             }
 
@@ -579,12 +794,12 @@ namespace NexChat.Services
                 client.Timeout = TimeSpan.FromSeconds(10);
                 
                 string url = $"http://localhost:{Port}/ping";
-                Console.WriteLine($"? Making GET request to: {url}");
+                Console.WriteLine($"📝 Making GET request to: {url}");
                 
                 var response = await client.GetAsync(url);
                 var content = await response.Content.ReadAsStringAsync();
                 
-                Console.WriteLine($"? Response received:");
+                Console.WriteLine($"📝 Response received:");
                 Console.WriteLine($"   Status: {(int)response.StatusCode} {response.StatusCode}");
                 Console.WriteLine($"   Content: '{content}'");
                 Console.WriteLine($"   Content-Type: {response.Content.Headers.ContentType}");
@@ -593,29 +808,29 @@ namespace NexChat.Services
                 
                 if (success)
                 {
-                    Console.WriteLine($"? Test PASSED - Server is responding correctly!");
+                    Console.WriteLine($"✓ Test PASSED - Server is responding correctly!");
                 }
                 else
                 {
-                    Console.WriteLine($"? Test FAILED - Expected 'pong', got '{content}'");
+                    Console.WriteLine($"❌ Test FAILED - Expected 'pong', got '{content}'");
                 }
                 
                 return success;
             }
             catch (HttpRequestException hex)
             {
-                Console.WriteLine($"? HttpRequestException: {hex.Message}");
+                Console.WriteLine($"❌ HttpRequestException: {hex.Message}");
                 Console.WriteLine($"   Inner Exception: {hex.InnerException?.Message}");
                 return false;
             }
             catch (TaskCanceledException tex)
             {
-                Console.WriteLine($"? Request timeout: {tex.Message}");
+                Console.WriteLine($"❌ Request timeout: {tex.Message}");
                 return false;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"? Test connection failed: {ex.Message}");
+                Console.WriteLine($"❌ Test connection failed: {ex.Message}");
                 Console.WriteLine($"   Exception Type: {ex.GetType().Name}");
                 Console.WriteLine($"   Stack Trace: {ex.StackTrace}");
                 return false;
