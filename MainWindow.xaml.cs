@@ -99,6 +99,7 @@ namespace NexChat
             {
                 // Hay actualización disponible o no está descargado
                 button.IsEnabled = true;
+                button.Visibility = Visibility.Visible;
                 textBlock.Text = _cloudflaredService.IsExecutablePresent() 
                     ? "Actualizar Cloudflare" 
                     : "Descargar Cloudflare";
@@ -108,6 +109,7 @@ namespace NexChat
             {
                 // Ya está actualizado
                 button.IsEnabled = false;
+                button.Visibility = Visibility.Collapsed;
                 textBlock.Text = "Cloudflare actualizado";
             }
         }
