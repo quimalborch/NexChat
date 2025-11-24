@@ -16,6 +16,7 @@ namespace NexChat.Services
         public ChatConnectorService()
         {
             _httpClient = new HttpClient();
+            _httpClient.Timeout = TimeSpan.FromSeconds(30);
         }
 
         public async Task<Chat?> GetChat(string url)
@@ -54,6 +55,44 @@ namespace NexChat.Services
             }
         }
 
+        public async Task<List<Message>?> GetNewMessages(string url, DateTime since)
+        {
+            try
+            {
+                // Construir la URL completa con el timestamp
+                long ticks = since.ToUniversalTime().Ticks;
+                string fullUrl = $"https://{url}.trycloudflare.com/chat/getNewMessages?since={ticks}";
+                
+                Console.WriteLine($"? Polling new messages from {url} since {since}");
+                
+                // Hacer la petición GET
+                HttpResponseMessage response = await _httpClient.GetAsync(fullUrl);
+                response.EnsureSuccessStatusCode();
+                
+                // Leer el contenido de la respuesta
+                string jsonContent = await response.Content.ReadAsStringAsync();
+                
+                // Deserializar el JSON a una lista de mensajes
+                List<Message>? messages = JsonSerializer.Deserialize<List<Message>>(jsonContent, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+                
+                Console.WriteLine($"? Received {messages?.Count ?? 0} new messages");
+                return messages ?? new List<Message>();
+            }
+            catch (HttpRequestException ex)
+            {
+                // Manejar errores de HTTP (no loggear para evitar spam en el polling)
+                return null;
+            }
+            catch (JsonException ex)
+            {
+                Console.WriteLine($"Error al deserializar JSON: {ex.Message}");
+                return null;
+            }
+        }
+
         public async Task<bool> SendMessage(string url, Message message)
         {
             try
@@ -61,7 +100,7 @@ namespace NexChat.Services
                 // Construir la URL completa
                 string fullUrl = $"https://{url}.trycloudflare.com/chat/sendMessage";
 
-                // Hacer la petición GET
+                // Hacer la petición POST
                 HttpContent content = new StringContent(JsonSerializer.Serialize(message), Encoding.UTF8, "application/json");
                 HttpResponseMessage response = await _httpClient.PostAsync(fullUrl, content);
                 response.EnsureSuccessStatusCode();
@@ -77,7 +116,7 @@ namespace NexChat.Services
             {
                 // Manejar errores de HTTP
                 Console.WriteLine($"Error en la petición HTTP: {ex.Message}");
-                return false; ;
+                return false;
             }
             catch (JsonException ex)
             {
