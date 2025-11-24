@@ -182,65 +182,69 @@ namespace NexChat
 
         private void _chatService_ChatListUpdated(object? sender, List<Data.Chat> e)
         {
-            ChatItems.Clear();
-            foreach (var chat in e)
-            {
-                ChatItems.Add(chat);
-            }
-            
-            // Si hay un chat seleccionado actualmente visible, verificar si necesita actualizarse
-            if (_selectedChat != null)
-            {
-                var updatedChat = e.FirstOrDefault(c => c.Id == _selectedChat.Id);
-                if (updatedChat != null && updatedChat.Messages.Count != _selectedChat.Messages.Count)
-                {
-                    Console.WriteLine($"?? Chat '{updatedChat.Name}' has new messages, updating UI...");
-                    // Actualizar la referencia del chat seleccionado
-                    _selectedChat = updatedChat;
-                    // Actualizar la vista
-                    UpdateChatViewIfNeeded(updatedChat);
-                }
-            }
-        }
-
-        /// <summary>
-        /// Actualiza la vista del chat si hay mensajes nuevos
-        /// </summary>
-        private void UpdateChatViewIfNeeded(Chat updatedChat)
-        {
+            // Dispatch to UI thread since this can be called from background threads (WebSocket)
             DispatcherQueue.TryEnqueue(() =>
             {
-                var content = this.Content as FrameworkElement;
-                if (content == null) return;
-
-                var messagesPanel = content.FindName("MessagesPanel") as StackPanel;
-                if (messagesPanel == null) return;
-
-                // Obtener IDs de mensajes actuales en la UI
-                var currentMessageIds = new HashSet<string>();
-                foreach (var child in messagesPanel.Children)
+                Console.WriteLine($"?? ChatListUpdated event triggered");
+                
+                // Primero, verificar si hay mensajes nuevos para el chat seleccionado
+                if (_selectedChat != null)
                 {
-                    if (child is Grid grid && grid.Tag is string messageId)
+                    var updatedChat = e.FirstOrDefault(c => c.Id == _selectedChat.Id);
+                    if (updatedChat != null)
                     {
-                        currentMessageIds.Add(messageId);
+                        Console.WriteLine($"?? Checking for new messages in selected chat '{updatedChat.Name}'");
+                        Console.WriteLine($"   Current chat has {_selectedChat.Messages.Count} messages");
+                        Console.WriteLine($"   Updated chat has {updatedChat.Messages.Count} messages");
+                        
+                        // Obtener el MessagesPanel para verificar qué mensajes ya están en la UI
+                        var content = this.Content as FrameworkElement;
+                        var messagesPanel = content?.FindName("MessagesPanel") as StackPanel;
+                        
+                        if (messagesPanel != null)
+                        {
+                            // Obtener IDs de mensajes que ya están en la UI
+                            var existingMessageIds = new HashSet<string>();
+                            foreach (var child in messagesPanel.Children)
+                            {
+                                if (child is Grid grid && grid.Tag is string messageId)
+                                {
+                                    existingMessageIds.Add(messageId);
+                                }
+                            }
+                            
+                            Console.WriteLine($"   UI currently has {existingMessageIds.Count} messages displayed");
+                            
+                            // Agregar solo mensajes que NO están en la UI
+                            foreach (var message in updatedChat.Messages)
+                            {
+                                if (!existingMessageIds.Contains(message.Id))
+                                {
+                                    Console.WriteLine($"   ? Adding new message to UI: {message.Content.Substring(0, Math.Min(30, message.Content.Length))}...");
+                                    AddMessageToUI(message);
+                                }
+                            }
+                            
+                            // Actualizar la referencia del _selectedChat con los nuevos mensajes
+                            _selectedChat = updatedChat;
+                            
+                            // Auto-scroll al final si había mensajes nuevos
+                            if (updatedChat.Messages.Count > existingMessageIds.Count)
+                            {
+                                ScrollToBottom();
+                            }
+                        }
                     }
                 }
-
-                // Agregar solo mensajes nuevos
-                foreach (var message in updatedChat.Messages)
+                
+                // Actualizar la lista de chats en el sidebar
+                ChatItems.Clear();
+                foreach (var chat in e)
                 {
-                    if (!currentMessageIds.Contains(message.Id))
-                    {
-                        Console.WriteLine($"?? Adding new message to UI: {message.Content}");
-                        AddMessageToUI(message);
-                    }
+                    ChatItems.Add(chat);
                 }
-
-                // Auto-scroll al final si hay mensajes nuevos
-                if (updatedChat.Messages.Count > currentMessageIds.Count)
-                {
-                    ScrollToBottom();
-                }
+                
+                Console.WriteLine($"? ChatList updated with {e.Count} chats");
             });
         }
 
