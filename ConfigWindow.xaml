@@ -58,7 +58,21 @@
                             BorderThickness="0">
                         <StackPanel Orientation="Horizontal" Spacing="12">
                             <FontIcon Glyph="&#xE77B;" FontSize="16"/>
-                            <TextBlock Text="General" FontSize="14" VerticalAlignment="Center"/>
+                            <TextBlock Text="Identidad" FontSize="14" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Button x:Name="BtnApariencia"
+                            Click="BtnApariencia_Click"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Left"
+                            Padding="12,10"
+                            CornerRadius="4"
+                            Background="Transparent"
+                            BorderThickness="0">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <FontIcon Glyph="&#xE790;" FontSize="16"/>
+                            <TextBlock Text="Apariencia" FontSize="14" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -68,92 +82,112 @@
             <ScrollViewer Grid.Column="1" 
                           VerticalScrollBarVisibility="Auto"
                           HorizontalAlignment="Stretch">
-                <!-- General Content -->
-                <StackPanel x:Name="IdentidadContent" 
-                            Visibility="Collapsed" 
-                            Spacing="32"
-                            MaxWidth="1000"
-                            HorizontalAlignment="Center"
-                            Margin="32,24">
-                    
-                    <!-- Header Section -->
-                    <StackPanel Spacing="8">
-                        <TextBlock Text="Información de usuario" 
-                                   FontSize="24" 
-                                   FontWeight="SemiBold"/>
-                        <TextBlock Text="Gestiona tu perfil y configuración personal" 
-                                   FontSize="14"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                <Grid>
+                    <!-- Identidad Content -->
+                    <StackPanel x:Name="IdentidadContent" 
+                                Visibility="Visible" 
+                                Spacing="32"
+                                HorizontalAlignment="Stretch"
+                                Margin="32,24">
+                        
+                        <!-- Header Section -->
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Información de usuario" 
+                                       FontSize="24" 
+                                       FontWeight="SemiBold"/>
+                            <TextBlock Text="Gestiona tu perfil y configuración personal" 
+                                       FontSize="14"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+
+                        <!-- User ID Card -->
+                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="20">
+                            <StackPanel Spacing="12">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="ID de Usuario" 
+                                               FontSize="14" 
+                                               FontWeight="SemiBold"/>
+                                    <TextBlock Text="Identificador único de tu cuenta" 
+                                               FontSize="12"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                </StackPanel>
+                                
+                                <Border Background="{ThemeResource ControlFillColorDefaultBrush}"
+                                        BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="4"
+                                        Padding="12,8">
+                                    <TextBlock x:Name="TextGuildUsuario" 
+                                               Text="XXXXXXXXXX"
+                                               FontFamily="Consolas"
+                                               FontSize="14"
+                                               IsTextSelectionEnabled="True"/>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Username Change Card -->
+                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="20">
+                            <StackPanel Spacing="16">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Nombre de usuario" 
+                                               FontSize="14" 
+                                               FontWeight="SemiBold"/>
+                                    <TextBlock Text="Modifica tu nombre visible en la aplicación" 
+                                               FontSize="12"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                </StackPanel>
+                                
+                                <StackPanel Spacing="12">
+                                    <TextBox x:Name="TextBoxIdentidad" 
+                                             PlaceholderText="Introduce tu nuevo nombre de usuario"
+                                             TextChanged="TextBoxIdentidad_TextChanged"
+                                             MaxLength="32"/>
+                                    
+                                    <Button x:Name="BtnConfirmarNewIdentidad"
+                                            Click="BtnConfirmarNewIdentidad_Click"
+                                            Visibility="Collapsed"
+                                            Style="{StaticResource AccentButtonStyle}"
+                                            HorizontalAlignment="Right"
+                                            Padding="24,8">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <FontIcon Glyph="&#xE74E;" FontSize="14"/>
+                                            <TextBlock Text="Guardar cambios"/>
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
                     </StackPanel>
 
-                    <!-- User ID Card -->
-                    <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                            BorderThickness="1"
-                            CornerRadius="8"
-                            Padding="20">
-                        <StackPanel Spacing="12">
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="ID de Usuario" 
-                                           FontSize="14" 
-                                           FontWeight="SemiBold"/>
-                                <TextBlock Text="Identificador único de tu cuenta" 
-                                           FontSize="12"
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                            </StackPanel>
-                            
-                            <Border Background="{ThemeResource ControlFillColorDefaultBrush}"
-                                    BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
-                                    BorderThickness="1"
-                                    CornerRadius="4"
-                                    Padding="12,8">
-                                <TextBlock x:Name="TextGuildUsuario" 
-                                           Text="XXXXXXXXXX"
-                                           FontFamily="Consolas"
-                                           FontSize="14"
-                                           IsTextSelectionEnabled="True"/>
-                            </Border>
+                    <!-- Apariencia Content -->
+                    <StackPanel x:Name="AparienciaContent" 
+                                Visibility="Collapsed" 
+                                Spacing="32"
+                                HorizontalAlignment="Stretch"
+                                Margin="32,24">
+                        
+                        <!-- Header Section -->
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Apariencia" 
+                                       FontSize="24" 
+                                       FontWeight="SemiBold"/>
+                            <TextBlock Text="Personaliza el aspecto visual de la aplicación" 
+                                       FontSize="14"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         </StackPanel>
-                    </Border>
 
-                    <!-- Username Change Card -->
-                    <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                            BorderThickness="1"
-                            CornerRadius="8"
-                            Padding="20">
-                        <StackPanel Spacing="16">
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="Nombre de usuario" 
-                                           FontSize="14" 
-                                           FontWeight="SemiBold"/>
-                                <TextBlock Text="Modifica tu nombre visible en la aplicación" 
-                                           FontSize="12"
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                            </StackPanel>
-                            
-                            <StackPanel Spacing="12">
-                                <TextBox x:Name="TextBoxIdentidad" 
-                                         PlaceholderText="Introduce tu nuevo nombre de usuario"
-                                         TextChanged="TextBoxIdentidad_TextChanged"
-                                         MaxLength="32"/>
-                                
-                                <Button x:Name="BtnConfirmarNewIdentidad"
-                                        Click="BtnConfirmarNewIdentidad_Click"
-                                        Visibility="Collapsed"
-                                        Style="{StaticResource AccentButtonStyle}"
-                                        HorizontalAlignment="Right"
-                                        Padding="24,8">
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <FontIcon Glyph="&#xE74E;" FontSize="14"/>
-                                        <TextBlock Text="Guardar cambios"/>
-                                    </StackPanel>
-                                </Button>
-                            </StackPanel>
-                        </StackPanel>
-                    </Border>
-
-                </StackPanel>
+                    </StackPanel>
+                </Grid>
             </ScrollViewer>
         </Grid>
     </Grid>

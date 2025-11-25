@@ -37,6 +37,21 @@ namespace NexChat
             _ventanaPrincipal = ventanaPrincipal;
             _configurationService = configurationService;
             
+            // Configurar tamaño de la ventana
+            var size = new Windows.Graphics.SizeInt32();
+            size.Width = 768;
+            size.Height = 600;
+            this.AppWindow.Resize(size);
+            
+            // Establecer configuración de la ventana
+            var presenter = this.AppWindow.Presenter as Microsoft.UI.Windowing.OverlappedPresenter;
+            if (presenter != null)
+            {
+                presenter.IsResizable = false;
+                presenter.IsMaximizable = false;
+                presenter.IsMinimizable = true;
+            }
+            
             LoadConfigurationUI();
             this.AppWindow.Closing += (_, __) => _ventanaPrincipal.AppWindow.Show();
         }
@@ -44,6 +59,19 @@ namespace NexChat
         private void BtnIdentidad_Click(object sender, RoutedEventArgs e)
         {
             IdentidadContent.Visibility = Visibility.Visible;
+            AparienciaContent.Visibility = Visibility.Collapsed;
+            
+            BtnIdentidad.Background = (Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"];
+            BtnApariencia.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
+        }
+
+        private void BtnApariencia_Click(object sender, RoutedEventArgs e)
+        {
+            IdentidadContent.Visibility = Visibility.Collapsed;
+            AparienciaContent.Visibility = Visibility.Visible;
+            
+            BtnApariencia.Background = (Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"];
+            BtnIdentidad.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
         }
 
         private void TextBoxIdentidad_TextChanged(object sender, TextChangedEventArgs e)
