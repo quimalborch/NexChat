@@ -6,16 +6,15 @@ using System.Threading.Tasks;
 
 namespace NexChat.Data
 {
-    public class Usuario
+    public class Configuration
     {
         public string idUsuario { get; set; }
 
-        public string nombreUsuario { get; set; }
+        public string nombreUsuario { get; set; } = "Yo";
 
-        public Usuario(string nombreUsuario) 
+        public Configuration() 
         {
             idUsuario = Guid.NewGuid().ToString();
-            this.nombreUsuario = nombreUsuario;
         }
     }
 }

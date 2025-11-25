@@ -31,18 +31,24 @@ namespace NexChat
         private ChatService _chatService;
         private CloudflaredService _cloudflaredService;
         private ChatConnectorService _chatConnectorService;
+        private ConfigurationService _configurationService;
         public ObservableCollection<Chat> ChatItems { get; set; }
         private Chat _selectedChat;
-        private string _currentUserId = Guid.NewGuid().ToString(); // ID del usuario actual
+        private string _currentUserId;
         private bool _cloudflareNeedsUpdate = false;
 
         public MainWindow()
         {
             InitializeComponent();
             ChatItems = new ObservableCollection<Chat>();
+            
+            _configurationService = new ConfigurationService();
             _chatConnectorService = new ChatConnectorService();
             _cloudflaredService = new CloudflaredService();
             _chatService = CreateChatService();
+            
+            _currentUserId = _configurationService.GetUserId();
+            
             _chatService.ChatListUpdated += _chatService_ChatListUpdated;
             // Invocar manualmente la actualización después de suscribirse
             _chatService.UpdateHandlerChats();
@@ -525,10 +531,11 @@ namespace NexChat
         {
             if (!_selectedChat.IsInvited)
             {
-                return "Yo";
-            } else
+                return _configurationService.GetUserName();
+            } 
+            else
             {
-                return "External";
+                return _configurationService.GetUserName();
             }
         }
 
@@ -811,7 +818,7 @@ namespace NexChat
 
         private void BtnConfig_Click(object sender, RoutedEventArgs e)
         {
-            ConfigWindow ventanaConfig = new ConfigWindow(this);
+            ConfigWindow ventanaConfig = new ConfigWindow(this, _configurationService);
             ventanaConfig.Title = "Configuración";
             ventanaConfig.Activate();
             this.AppWindow.Hide();

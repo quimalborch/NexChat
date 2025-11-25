@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using NexChat.Data;
+using NexChat.Services;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -28,12 +29,15 @@ namespace NexChat
     public sealed partial class ConfigWindow : Window
     {
         private MainWindow _ventanaPrincipal;
-        private Usuario? _usuario;
-        public ConfigWindow(MainWindow ventanaPrincipal)
+        private ConfigurationService _configurationService;
+
+        public ConfigWindow(MainWindow ventanaPrincipal, ConfigurationService configurationService)
         {
             InitializeComponent();
             _ventanaPrincipal = ventanaPrincipal;
-            LoadUsuario();
+            _configurationService = configurationService;
+            
+            LoadConfigurationUI();
             this.AppWindow.Closing += (_, __) => _ventanaPrincipal.AppWindow.Show();
         }
 
@@ -44,119 +48,92 @@ namespace NexChat
 
         private void TextBoxIdentidad_TextChanged(object sender, TextChangedEventArgs e)
         {
-            if (TextBoxIdentidad.Text.Length > 0)
+            if (!string.IsNullOrWhiteSpace(TextBoxIdentidad.Text))
             {
-                CheckConfirmarNewIdentidad.Visibility = Visibility.Visible;
+                BtnConfirmarNewIdentidad.Visibility = Visibility.Visible;
             }
             else
             {
-                CheckConfirmarNewIdentidad.Visibility = Visibility.Collapsed;
+                BtnConfirmarNewIdentidad.Visibility = Visibility.Collapsed;
             }
         }
 
-        private async void CheckConfirmarNewIdentidad_Click(object sender, RoutedEventArgs e)
+        private async void BtnConfirmarNewIdentidad_Click(object sender, RoutedEventArgs e)
         {
-            if (CheckConfirmarNewIdentidad.IsChecked == true)
-            {
-                ContentDialog confirmDialog = new ContentDialog
-                {
-                    Title = "Confirmar cambio de nombre de usuario",
-                    Content = $"¿Está seguro de que desea cambiar su nombre de usuario a '{TextBoxIdentidad.Text}'?",
-                    PrimaryButtonText = "Confirmar",
-                    CloseButtonText = "Cancelar",
-                    XamlRoot = this.Content.XamlRoot
-                };
+            string nombreUsuario = TextBoxIdentidad.Text.Trim();
 
-                ContentDialogResult result = await confirmDialog.ShowAsync();
-
-                if (result == ContentDialogResult.Primary)
-                {
-                    string nombreUsuario = TextBoxIdentidad.Text;
-
-                    if (_usuario is null)
-                    {
-                        Usuario nuevoUsuario = new Usuario(nombreUsuario);
-                        SaveUsuario(nuevoUsuario);
-                    }
-                    else 
-                    { 
-                        _usuario.nombreUsuario = nombreUsuario;
-                    }
-
-                    TextGuildUsuario.Text = _usuario.idUsuario.ToString();
-                }
-                else
-                {
-                    TextBoxIdentidad.Text = string.Empty;
-                    CheckConfirmarNewIdentidad.IsChecked = false;
-                    CheckConfirmarNewIdentidad.Visibility = Visibility.Collapsed;
-                    IdentidadContent.Visibility = Visibility.Collapsed;
-                }
-            }
-        }
-
-        public void SaveUsuario(Usuario usuario) 
-        {
-            string path = LoadUsuarioPath();
-            string directory = Path.GetDirectoryName(path);
-
-            if (!Directory.Exists(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
-
-            string json = JsonSerializer.Serialize(usuario);
-            File.WriteAllText(path, json);
-        }
-
-        public string LoadUsuarioPath()
-        {
-            string folder = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "NexChat",
-                "User"
-            );
-            
-            if (!Directory.Exists(folder))
-            {
-                Directory.CreateDirectory(folder);
-            }
-
-            return Path.Combine(folder, "user.ncf");
-        }
-
-        public void LoadUsuario() 
-        {
-            LoadUsuarioInterno();
-            RecuperarUsuarioUI();
-        }
-
-        public void LoadUsuarioInterno() 
-        {
-            string path = LoadUsuarioPath();
-            string? directory = Path.GetDirectoryName(path);
-
-            if (!Directory.Exists(directory)) Directory.CreateDirectory(directory);
-
-            if (!File.Exists(path))
-            {
-                using (File.Create(path)) { }
-            }
-
-            string conteindoJSON = File.ReadAllText(path);
-            if (string.IsNullOrEmpty(conteindoJSON))
+            if (string.IsNullOrWhiteSpace(nombreUsuario))
             {
                 return;
             }
 
-            _usuario = JsonSerializer.Deserialize<Usuario>(conteindoJSON);
+            ContentDialog confirmDialog = new ContentDialog
+            {
+                Title = "Confirmar cambio de nombre de usuario",
+                Content = $"¿Está seguro de que desea cambiar su nombre de usuario a '{nombreUsuario}'?",
+                PrimaryButtonText = "Confirmar",
+                CloseButtonText = "Cancelar",
+                XamlRoot = this.Content.XamlRoot,
+                DefaultButton = ContentDialogButton.Primary
+            };
+
+            ContentDialogResult result = await confirmDialog.ShowAsync();
+
+            if (result == ContentDialogResult.Primary)
+            {
+                bool success = await _configurationService.UpdateUserNameAsync(nombreUsuario);
+
+                if (success)
+                {
+                    UpdateUserIdDisplay();
+                    
+                    var successDialog = new ContentDialog
+                    {
+                        Title = "Nombre actualizado",
+                        Content = $"Tu nombre de usuario ha sido actualizado a '{nombreUsuario}'",
+                        CloseButtonText = "Aceptar",
+                        XamlRoot = this.Content.XamlRoot
+                    };
+                    await successDialog.ShowAsync();
+                    
+                    TextBoxIdentidad.Text = string.Empty;
+                    BtnConfirmarNewIdentidad.Visibility = Visibility.Collapsed;
+                }
+                else
+                {
+                    var errorDialog = new ContentDialog
+                    {
+                        Title = "Error",
+                        Content = "No se pudo guardar el nombre de usuario. Inténtalo de nuevo.",
+                        CloseButtonText = "Aceptar",
+                        XamlRoot = this.Content.XamlRoot
+                    };
+                    await errorDialog.ShowAsync();
+                }
+            }
         }
 
-        public void RecuperarUsuarioUI()
+        private void LoadConfigurationUI()
         {
-            if (_usuario is null) return;
+            var configuration = _configurationService.CurrentConfiguration;
+            
+            if (configuration != null)
+            {
+                UpdateUserIdDisplay();
+            }
+            else
+            {
+                TextGuildUsuario.Text = "No configurado";
+            }
+        }
 
-            TextGuildUsuario.Text = _usuario.idUsuario.ToString();
+        private void UpdateUserIdDisplay()
+        {
+            var configuration = _configurationService.CurrentConfiguration;
+            if (configuration != null)
+            {
+                TextGuildUsuario.Text = configuration.idUsuario.ToString();
+            }
         }
     }
 }
