@@ -72,8 +72,7 @@
                 <StackPanel x:Name="IdentidadContent" 
                             Visibility="Collapsed" 
                             Spacing="32"
-                            MaxWidth="1000"
-                            HorizontalAlignment="Center"
+                            HorizontalAlignment="Stretch"
                             Margin="32,24">
                     
                     <!-- Header Section -->
