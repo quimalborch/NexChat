@@ -811,7 +811,10 @@ namespace NexChat
 
         private void BtnConfig_Click(object sender, RoutedEventArgs e)
         {
-
+            ConfigWindow ventanaConfig = new ConfigWindow(this);
+            ventanaConfig.Title = "Configuración";
+            ventanaConfig.Activate();
+            this.AppWindow.Hide();
         }
     }
 }
