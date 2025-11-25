@@ -217,10 +217,13 @@ namespace NexChat
 
                 if (success)
                 {
+                    // Intentar aplicar el tema inmediatamente
+                    ApplyThemeToCurrentWindow(selectedTheme.Value);
+
                     var infoDialog = new ContentDialog
                     {
                         Title = "Tema actualizado",
-                        Content = $"El tema '{selectedTheme.DisplayName}' ha sido guardado. Los cambios se aplicarán al reiniciar la aplicación.",
+                        Content = $"El tema '{selectedTheme.DisplayName}' ha sido guardado y se aplicará completamente al reiniciar la aplicación.",
                         CloseButtonText = "Aceptar",
                         XamlRoot = this.Content.XamlRoot
                     };
@@ -237,6 +240,41 @@ namespace NexChat
                     };
                     await errorDialog.ShowAsync();
                 }
+            }
+        }
+
+        private void ApplyThemeToCurrentWindow(Configuration.PaletaColoresSeleccionada selectedTheme)
+        {
+            try
+            {
+                ElementTheme theme = selectedTheme switch
+                {
+                    Configuration.PaletaColoresSeleccionada.Automatico => ElementTheme.Default,
+                    Configuration.PaletaColoresSeleccionada.Oscuro => ElementTheme.Dark,
+                    Configuration.PaletaColoresSeleccionada.Claro => ElementTheme.Light,
+                    Configuration.PaletaColoresSeleccionada.Rojo => ElementTheme.Dark,
+                    Configuration.PaletaColoresSeleccionada.Verde => ElementTheme.Dark,
+                    Configuration.PaletaColoresSeleccionada.Morado => ElementTheme.Dark,
+                    _ => ElementTheme.Default
+                };
+
+                // Aplicar el tema a la ventana actual
+                if (this.Content is FrameworkElement rootElement)
+                {
+                    rootElement.RequestedTheme = theme;
+                }
+
+                // Aplicar el tema a la ventana principal si está disponible
+                if (_ventanaPrincipal?.Content is FrameworkElement mainWindowRoot)
+                {
+                    mainWindowRoot.RequestedTheme = theme;
+                }
+
+                Console.WriteLine($"Applied theme to windows: {selectedTheme}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error applying theme: {ex.Message}");
             }
         }
 

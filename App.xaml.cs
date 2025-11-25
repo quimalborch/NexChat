@@ -15,6 +15,8 @@ using Windows.ApplicationModel;
 using Windows.ApplicationModel.Activation;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
+using NexChat.Data;
+using NexChat.Services;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -27,6 +29,7 @@ namespace NexChat
     public partial class App : Application
     {
         private Window? _window;
+        private ConfigurationService _configurationService;
 
         /// <summary>
         /// Initializes the singleton application object.  This is the first line of authored code
@@ -35,6 +38,8 @@ namespace NexChat
         public App()
         {
             InitializeComponent();
+            _configurationService = new ConfigurationService();
+            ApplyTheme();
         }
 
         /// <summary>
@@ -45,6 +50,35 @@ namespace NexChat
         {
             _window = new MainWindow();
             _window.Activate();
+        }
+
+        private void ApplyTheme()
+        {
+            var configuration = _configurationService.GetOrCreateConfiguration();
+            var selectedTheme = configuration.paletaColoresSeleccionada;
+
+            ElementTheme theme = selectedTheme switch
+            {
+                Configuration.PaletaColoresSeleccionada.Automatico => ElementTheme.Default,
+                Configuration.PaletaColoresSeleccionada.Oscuro => ElementTheme.Dark,
+                Configuration.PaletaColoresSeleccionada.Claro => ElementTheme.Light,
+                // Para los temas de color personalizados, por ahora usamos el tema oscuro
+                // TODO: Implementar paletas de colores personalizadas
+                Configuration.PaletaColoresSeleccionada.Rojo => ElementTheme.Dark,
+                Configuration.PaletaColoresSeleccionada.Verde => ElementTheme.Dark,
+                Configuration.PaletaColoresSeleccionada.Morado => ElementTheme.Dark,
+                _ => ElementTheme.Default
+            };
+
+            // Aplicar el tema a nivel de aplicación
+            this.RequestedTheme = theme switch
+            {
+                ElementTheme.Dark => ApplicationTheme.Dark,
+                ElementTheme.Light => ApplicationTheme.Light,
+                _ => ApplicationTheme.Light // Default usa el tema del sistema
+            };
+
+            Console.WriteLine($"Applied theme: {selectedTheme} -> {this.RequestedTheme}");
         }
     }
 }
