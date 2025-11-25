@@ -211,23 +211,52 @@ namespace NexChat
             if (ComboBoxTema.SelectedItem is ThemeOption selectedTheme)
             {
                 var configuration = _configurationService.GetOrCreateConfiguration();
+                var previousTheme = configuration.paletaColoresSeleccionada;
                 configuration.paletaColoresSeleccionada = selectedTheme.Value;
 
                 bool success = await _configurationService.SaveConfigurationAsync(configuration);
 
                 if (success)
                 {
-                    // Intentar aplicar el tema inmediatamente
-                    ApplyThemeToCurrentWindow(selectedTheme.Value);
-
-                    var infoDialog = new ContentDialog
+                    // Determinar si se necesita reiniciar la app
+                    bool needsRestart = RequiresAppRestart(previousTheme, selectedTheme.Value);
+                    
+                    // Recargar el tema a nivel de aplicación
+                    if (Application.Current is App app)
                     {
-                        Title = "Tema actualizado",
-                        Content = $"El tema '{selectedTheme.DisplayName}' ha sido guardado y se aplicará completamente al reiniciar la aplicación.",
-                        CloseButtonText = "Aceptar",
-                        XamlRoot = this.Content.XamlRoot
-                    };
-                    await infoDialog.ShowAsync();
+                        app.UpdateTheme();
+                    }
+
+                    ContentDialog dialog;
+                    if (needsRestart)
+                    {
+                        dialog = new ContentDialog
+                        {
+                            Title = "Reinicio necesario",
+                            Content = $"El tema '{selectedTheme.DisplayName}' se ha guardado. Para aplicar completamente el tema, necesitas reiniciar la aplicación.",
+                            PrimaryButtonText = "Cerrar aplicación",
+                            CloseButtonText = "Continuar",
+                            XamlRoot = this.Content.XamlRoot
+                        };
+                        
+                        var result = await dialog.ShowAsync();
+                        if (result == ContentDialogResult.Primary)
+                        {
+                            // Cerrar la aplicación
+                            Application.Current.Exit();
+                        }
+                    }
+                    else
+                    {
+                        dialog = new ContentDialog
+                        {
+                            Title = "Tema actualizado",
+                            Content = $"El tema '{selectedTheme.DisplayName}' ha sido aplicado correctamente.",
+                            CloseButtonText = "Aceptar",
+                            XamlRoot = this.Content.XamlRoot
+                        };
+                        await dialog.ShowAsync();
+                    }
                 }
                 else
                 {
@@ -241,6 +270,19 @@ namespace NexChat
                     await errorDialog.ShowAsync();
                 }
             }
+        }
+
+        /// <summary>
+        /// Determina si cambiar de un tema a otro requiere reiniciar la aplicación
+        /// </summary>
+        private bool RequiresAppRestart(Configuration.PaletaColoresSeleccionada from, Configuration.PaletaColoresSeleccionada to)
+        {
+            // Determinar el tema base de cada uno
+            bool fromIsLight = from == Configuration.PaletaColoresSeleccionada.Claro;
+            bool toIsLight = to == Configuration.PaletaColoresSeleccionada.Claro;
+            
+            // Si cambia entre Light y Dark (o cualquier otro), necesita reinicio
+            return fromIsLight != toIsLight;
         }
 
         private void ApplyThemeToCurrentWindow(Configuration.PaletaColoresSeleccionada selectedTheme)

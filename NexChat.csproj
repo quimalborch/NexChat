@@ -21,6 +21,9 @@
   </PropertyGroup>
   <ItemGroup>
     <None Remove="ConfigWindow.xaml" />
+    <None Remove="Themes\GreenTheme.xaml" />
+    <None Remove="Themes\PurpleTheme.xaml" />
+    <None Remove="Themes\RedTheme.xaml" />
   </ItemGroup>
 
   <ItemGroup>
@@ -51,6 +54,15 @@
   </ItemGroup>
   <ItemGroup>
     <Page Update="ConfigWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Update="Themes\RedTheme.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Update="Themes\GreenTheme.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Update="Themes\PurpleTheme.xaml">
       <Generator>MSBuild:Compile</Generator>
     </Page>
   </ItemGroup>
