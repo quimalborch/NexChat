@@ -12,6 +12,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Text.Json;
 using System.Threading;
@@ -30,6 +31,7 @@ namespace NexChat
     {
         private MainWindow _ventanaPrincipal;
         private ConfigurationService _configurationService;
+        private bool _isLoadingTheme = false;
 
         public ConfigWindow(MainWindow ventanaPrincipal, ConfigurationService configurationService)
         {
@@ -153,6 +155,8 @@ namespace NexChat
             {
                 TextGuildUsuario.Text = "No configurado";
             }
+
+            LoadThemeOptions();
         }
 
         private void UpdateUserIdDisplay()
@@ -162,6 +166,84 @@ namespace NexChat
             {
                 TextGuildUsuario.Text = configuration.idUsuario.ToString();
             }
+        }
+
+        private void LoadThemeOptions()
+        {
+            _isLoadingTheme = true;
+
+            var themeOptions = new List<ThemeOption>();
+
+            foreach (Configuration.PaletaColoresSeleccionada palette in Enum.GetValues(typeof(Configuration.PaletaColoresSeleccionada)))
+            {
+                var fieldInfo = palette.GetType().GetField(palette.ToString());
+                var descriptionAttribute = fieldInfo?.GetCustomAttribute<DescriptionAttribute>();
+                
+                string displayName = descriptionAttribute?.Description ?? palette.ToString();
+                
+                themeOptions.Add(new ThemeOption
+                {
+                    Value = palette,
+                    DisplayName = displayName
+                });
+            }
+
+            ComboBoxTema.ItemsSource = themeOptions;
+            ComboBoxTema.DisplayMemberPath = "DisplayName";
+
+            var currentConfig = _configurationService.GetOrCreateConfiguration();
+            var selectedOption = themeOptions.FirstOrDefault(t => t.Value == currentConfig.paletaColoresSeleccionada);
+            if (selectedOption != null)
+            {
+                ComboBoxTema.SelectedItem = selectedOption;
+            }
+
+            _isLoadingTheme = false;
+        }
+
+        private async void ComboBoxTema_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_isLoadingTheme)
+            {
+                return;
+            }
+
+            if (ComboBoxTema.SelectedItem is ThemeOption selectedTheme)
+            {
+                var configuration = _configurationService.GetOrCreateConfiguration();
+                configuration.paletaColoresSeleccionada = selectedTheme.Value;
+
+                bool success = await _configurationService.SaveConfigurationAsync(configuration);
+
+                if (success)
+                {
+                    var infoDialog = new ContentDialog
+                    {
+                        Title = "Tema actualizado",
+                        Content = $"El tema '{selectedTheme.DisplayName}' ha sido guardado. Los cambios se aplicarán al reiniciar la aplicación.",
+                        CloseButtonText = "Aceptar",
+                        XamlRoot = this.Content.XamlRoot
+                    };
+                    await infoDialog.ShowAsync();
+                }
+                else
+                {
+                    var errorDialog = new ContentDialog
+                    {
+                        Title = "Error",
+                        Content = "No se pudo guardar el tema seleccionado. Inténtalo de nuevo.",
+                        CloseButtonText = "Aceptar",
+                        XamlRoot = this.Content.XamlRoot
+                    };
+                    await errorDialog.ShowAsync();
+                }
+            }
+        }
+
+        private class ThemeOption
+        {
+            public Configuration.PaletaColoresSeleccionada Value { get; set; }
+            public string DisplayName { get; set; } = string.Empty;
         }
     }
 }

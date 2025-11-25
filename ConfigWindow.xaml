@@ -186,6 +186,29 @@
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         </StackPanel>
 
+                        <!-- Theme Selection Card -->
+                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="20">
+                            <StackPanel Spacing="16">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Tema de la aplicación" 
+                                               FontSize="14" 
+                                               FontWeight="SemiBold"/>
+                                    <TextBlock Text="Selecciona el esquema de colores para la aplicación" 
+                                               FontSize="12"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                </StackPanel>
+                                
+                                <ComboBox x:Name="ComboBoxTema" 
+                                          SelectionChanged="ComboBoxTema_SelectionChanged"
+                                          HorizontalAlignment="Stretch"
+                                          PlaceholderText="Selecciona un tema"/>
+                            </StackPanel>
+                        </Border>
+
                     </StackPanel>
                 </Grid>
             </ScrollViewer>
