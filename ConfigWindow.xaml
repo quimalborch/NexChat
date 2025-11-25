@@ -50,12 +50,7 @@
                     
                     <Button x:Name="BtnIdentidad"
                             Click="BtnIdentidad_Click"
-                            HorizontalAlignment="Stretch"
-                            HorizontalContentAlignment="Left"
-                            Padding="12,10"
-                            CornerRadius="4"
-                            Background="{ThemeResource SubtleFillColorSecondaryBrush}"
-                            BorderThickness="0">
+                            Style="{StaticResource NavigationButtonSelectedStyle}">
                         <StackPanel Orientation="Horizontal" Spacing="12">
                             <FontIcon Glyph="&#xE77B;" FontSize="16"/>
                             <TextBlock Text="Identidad" FontSize="14" VerticalAlignment="Center"/>
@@ -64,12 +59,7 @@
 
                     <Button x:Name="BtnApariencia"
                             Click="BtnApariencia_Click"
-                            HorizontalAlignment="Stretch"
-                            HorizontalContentAlignment="Left"
-                            Padding="12,10"
-                            CornerRadius="4"
-                            Background="Transparent"
-                            BorderThickness="0">
+                            Style="{StaticResource NavigationButtonStyle}">
                         <StackPanel Orientation="Horizontal" Spacing="12">
                             <FontIcon Glyph="&#xE790;" FontSize="16"/>
                             <TextBlock Text="Apariencia" FontSize="14" VerticalAlignment="Center"/>

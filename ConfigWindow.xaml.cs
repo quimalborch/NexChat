@@ -63,8 +63,8 @@ namespace NexChat
             IdentidadContent.Visibility = Visibility.Visible;
             AparienciaContent.Visibility = Visibility.Collapsed;
             
-            BtnIdentidad.Background = (Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"];
-            BtnApariencia.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
+            BtnIdentidad.Style = (Style)Application.Current.Resources["NavigationButtonSelectedStyle"];
+            BtnApariencia.Style = (Style)Application.Current.Resources["NavigationButtonStyle"];
         }
 
         private void BtnApariencia_Click(object sender, RoutedEventArgs e)
@@ -72,8 +72,8 @@ namespace NexChat
             IdentidadContent.Visibility = Visibility.Collapsed;
             AparienciaContent.Visibility = Visibility.Visible;
             
-            BtnApariencia.Background = (Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"];
-            BtnIdentidad.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
+            BtnApariencia.Style = (Style)Application.Current.Resources["NavigationButtonSelectedStyle"];
+            BtnIdentidad.Style = (Style)Application.Current.Resources["NavigationButtonStyle"];
         }
 
         private void TextBoxIdentidad_TextChanged(object sender, TextChangedEventArgs e)
