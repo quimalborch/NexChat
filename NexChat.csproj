@@ -12,6 +12,7 @@
     <WinUISDKReferences>false</WinUISDKReferences>
     <EnableMsixTooling>true</EnableMsixTooling>
     <Nullable>enable</Nullable>
+	<StartupObject>NexChat.App</StartupObject>
   </PropertyGroup>
 
   <!-- IMPORTANTE: Configuración solo para Release (publish) -->
@@ -19,6 +20,9 @@
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
   </PropertyGroup>
+  <ItemGroup>
+    <ApplicationDefinition Remove="App.xaml" />
+  </ItemGroup>
   <ItemGroup>
     <None Remove="ConfigWindow.xaml" />
     <None Remove="Themes\GreenTheme.xaml" />
@@ -51,6 +55,10 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.7175" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.251106002" />
+    <PackageReference Include="Velopack" Version="0.0.1298" />
+  </ItemGroup>
+  <ItemGroup>
+    <Page Include="App.xaml" />
   </ItemGroup>
   <ItemGroup>
     <Page Update="ConfigWindow.xaml">
