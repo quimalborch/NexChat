@@ -78,7 +78,8 @@ namespace NexChat
 
         private void TextBoxIdentidad_TextChanged(object sender, TextChangedEventArgs e)
         {
-            if (!string.IsNullOrWhiteSpace(TextBoxIdentidad.Text))
+            var configuration = _configurationService.CurrentConfiguration;
+            if ((configuration?.nombreUsuario != TextBoxIdentidad.Text) && !string.IsNullOrWhiteSpace(TextBoxIdentidad.Text))
             {
                 BtnConfirmarNewIdentidad.Visibility = Visibility.Visible;
             }
@@ -126,7 +127,6 @@ namespace NexChat
                     };
                     await successDialog.ShowAsync();
                     
-                    TextBoxIdentidad.Text = string.Empty;
                     BtnConfirmarNewIdentidad.Visibility = Visibility.Collapsed;
                 }
                 else
@@ -165,6 +165,7 @@ namespace NexChat
             if (configuration != null)
             {
                 TextGuildUsuario.Text = configuration.idUsuario.ToString();
+                TextBoxIdentidad.Text = configuration.nombreUsuario;
             }
         }
 
