@@ -555,34 +555,13 @@ namespace NexChat
                 return;
             }
 
-            _chatConnectorService.SendMessage(_selectedChat.CodeInvitation, message).ContinueWith(sendTask =>
-            {
-                bool success = sendTask.Result;
-                if (success)
-                {
-                    DispatcherQueue.TryEnqueue(() =>
-                    {
-                        AddMessageToUI(message);
-                        messageInputBox.Text = string.Empty;
-                        ScrollToBottom();
-                    });
-                }
-                else
-                {
-                    // Manejar error de envío (opcional)
-                    DispatcherQueue.TryEnqueue(async () =>
-                    {
-                        var dialog = new ContentDialog
-                        {
-                            Title = "Error al enviar mensaje",
-                            Content = "No se pudo enviar el mensaje. Verifica tu conexión.",
-                            CloseButtonText = "Aceptar",
-                            XamlRoot = this.Content.XamlRoot
-                        };
-                        await dialog.ShowAsync();
-                    });
-                }
-            });
+            // Usar AddMessage del ChatService que maneja WebSocket automáticamente
+            await _chatService.AddMessage(_selectedChat.Id, message);
+            
+            // Limpiar input después de enviar
+            messageInputBox.Text = string.Empty;
+            
+            Console.WriteLine($"✓ Message sent to ChatService, waiting for server confirmation");
         }
 
         private void SendMessage(TextBox messageInputBox, Message message)

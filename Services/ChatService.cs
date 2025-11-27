@@ -359,7 +359,19 @@ namespace NexChat.Services
                 {
                     Console.WriteLine($"❌ Failed to send message via WebSocket, falling back to HTTP");
                     // Fallback a HTTP POST si WebSocket falla
-                    await _chatConnectorService.SendMessage(chat.CodeInvitation!, message);
+                    bool httpSent = await _chatConnectorService.SendMessage(chat.CodeInvitation!, message);
+                    
+                    if (httpSent)
+                    {
+                        // Con HTTP no hay broadcast automático, así que agregamos el mensaje manualmente
+                        message.Chat = chat;
+                        if (!chat.Messages.Any(m => m.Id == message.Id))
+                        {
+                            chat.Messages.Add(message);
+                            SaveChats();
+                            Console.WriteLine($"✓ Message added locally after HTTP fallback");
+                        }
+                    }
                 }
             }
             else
