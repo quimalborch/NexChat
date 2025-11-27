@@ -67,7 +67,6 @@ namespace NexChat
 #if !DEBUG
                 if (updateInfo is null)
                 {
-                    Log.Error("Cannot apply updates: update info is null");
                     Debug.WriteLine("Cannot apply updates: update is null");
                     return;
                 }
