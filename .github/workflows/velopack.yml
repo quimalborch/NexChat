@@ -1,0 +1,75 @@
+name: Deploy to GitHub Releases
+
+permissions:
+  contents: write
+
+on:
+  push:
+    branches:
+      - CICD-Velopack
+
+jobs:
+  verify-version:
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+      should-release: ${{ steps.check-version.outputs.should-release }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: Get Version from Project File
+        id: get-version
+        shell: bash
+        run: echo "version=$(grep -oE '<AssemblyVersion>[^<]+' NexChat.csproj | sed 's/<AssemblyVersion>//')" >> $GITHUB_OUTPUT
+      
+      - name: Get Version from Github Tags
+        id: get-github-version
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const tags = await github.rest.repos.listTags({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100,
+            });
+            const versionTag = tags.data.find(tag => tag.name === `v${{ steps.get-version.outputs.version }}`);
+            if (versionTag) {
+              core.setOutput('exists', 'true');
+            } else {
+              core.setOutput('exists', 'false');
+            }
+      
+      - name: Check Version Status
+        id: check-version
+        run: |
+          if ("${{ steps.get-github-version.outputs.exists }}" -eq "false") {
+            echo "Version ${{ steps.get-version.outputs.version }} does not exist in GitHub tags. Proceeding with release."
+            echo "should-release=true" >> $env:GITHUB_OUTPUT
+          } else {
+            echo "Version ${{ steps.get-version.outputs.version }} already exists in GitHub tags. Skipping release."
+            echo "should-release=false" >> $env:GITHUB_OUTPUT
+          }
+
+  version-release:
+    needs: verify-version
+    runs-on: windows-latest
+    if: needs.verify-version.outputs.should-release == 'true'
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      
+      - name: Publish Application
+        run: dotnet publish NexChat.csproj -c Release -o publish -r win-x64 -p:Platform=x64 --self-contained 
+      
+      - name: Create Velopack Release
+        run: |
+          dotnet tool install -g vpk
+          vpk download github --repoUrl https://github.com/${{ github.repository }} --token ${{ secrets.GITHUB_TOKEN }}
+          vpk pack -u NexChat -v ${{ needs.verify-version.outputs.version }} -p publish
+          vpk upload github --repoUrl https://github.com/${{ github.repository }} --publish --releaseName "NexChat ${{ needs.verify-version.outputs.version }}" --tag v${{ needs.verify-version.outputs.version }} --token ${{ secrets.GITHUB_TOKEN }}

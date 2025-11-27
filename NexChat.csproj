@@ -83,5 +83,6 @@
     <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">True</PublishReadyToRun>
     <!-- Deshabilitar trimming para evitar problemas con JSON serialization -->
     <PublishTrimmed>False</PublishTrimmed>
+    <AssemblyVersion>1.0.1</AssemblyVersion>
   </PropertyGroup>
 </Project>
