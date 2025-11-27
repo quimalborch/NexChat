@@ -4,6 +4,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:NexChat"
+    xmlns:data="using:NexChat.Data"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
@@ -63,6 +64,15 @@
                         <StackPanel Orientation="Horizontal" Spacing="12">
                             <FontIcon Glyph="&#xE790;" FontSize="16"/>
                             <TextBlock Text="Apariencia" FontSize="14" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Button x:Name="BtnUsuariosCertificados"
+                            Click="BtnUsuariosCertificados_Click"
+                            Style="{StaticResource NavigationButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <FontIcon Glyph="&#xE716;" FontSize="16"/>
+                            <TextBlock Text="Usuarios Certificados" FontSize="14" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -228,6 +238,178 @@
                                           SelectionChanged="ComboBoxTema_SelectionChanged"
                                           HorizontalAlignment="Stretch"
                                           PlaceholderText="Selecciona un tema"/>
+                            </StackPanel>
+                        </Border>
+
+                    </StackPanel>
+
+                    <!-- Usuarios Certificados Content -->
+                    <StackPanel x:Name="UsuariosCertificadosContent" 
+                                Visibility="Collapsed" 
+                                Spacing="32"
+                                HorizontalAlignment="Stretch"
+                                Margin="32,24">
+                        
+                        <!-- Header Section -->
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Usuarios Certificados" 
+                                       FontSize="24" 
+                                       FontWeight="SemiBold"/>
+                            <TextBlock Text="Gestiona los usuarios de confianza con sus códigos de acceso" 
+                                       FontSize="14"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+
+                        <!-- Add New User Card -->
+                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="20">
+                            <StackPanel Spacing="16">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Agregar nuevo usuario certificado" 
+                                               FontSize="14" 
+                                               FontWeight="SemiBold"/>
+                                    <TextBlock Text="Introduce el nombre y la llave del usuario de confianza" 
+                                               FontSize="12"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                </StackPanel>
+                                
+                                <Grid ColumnSpacing="12" RowSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    
+                                    <TextBox x:Name="TextBoxNuevoNombre" 
+                                             Grid.Column="0"
+                                             PlaceholderText="Nombre del usuario"
+                                             MaxLength="50"/>
+                                    
+                                    <TextBox x:Name="TextBoxNuevaLlave" 
+                                             Grid.Column="1"
+                                             PlaceholderText="Llave de acceso"
+                                             MaxLength="100"/>
+                                    
+                                    <Button x:Name="BtnAgregarUsuario"
+                                            Grid.Column="2"
+                                            Click="BtnAgregarUsuario_Click"
+                                            Style="{StaticResource AccentButtonStyle}"
+                                            VerticalAlignment="Stretch"
+                                            Padding="24,0">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <FontIcon Glyph="&#xE710;" FontSize="14"/>
+                                            <TextBlock Text="Agregar"/>
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Users List Card -->
+                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="20">
+                            <StackPanel Spacing="16">
+                                <TextBlock Text="Lista de usuarios certificados" 
+                                           FontSize="14" 
+                                           FontWeight="SemiBold"/>
+                                
+                                <!-- Empty State -->
+                                <StackPanel x:Name="EmptyUsersState"
+                                            Visibility="Visible"
+                                            Spacing="12"
+                                            HorizontalAlignment="Center"
+                                            Padding="40">
+                                    <FontIcon Glyph="&#xE716;" 
+                                              FontSize="48"
+                                              Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <TextBlock Text="No hay usuarios certificados"
+                                               FontSize="14"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                               HorizontalAlignment="Center"/>
+                                    <TextBlock Text="Agrega usuarios de confianza para gestionar sus accesos"
+                                               FontSize="12"
+                                               Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                               HorizontalAlignment="Center"
+                                               TextWrapping="Wrap"
+                                               MaxWidth="300"/>
+                                </StackPanel>
+
+                                <!-- Users ListView -->
+                                <ListView x:Name="CertifiedUsersListView"
+                                          Visibility="Collapsed"
+                                          SelectionMode="None"
+                                          ItemsSource="{x:Bind CertifiedUsers, Mode=OneWay}">
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate x:DataType="data:CertifiedUser">
+                                            <Grid Padding="12"
+                                                  ColumnSpacing="16"
+                                                  Background="{ThemeResource LayerFillColorDefaultBrush}"
+                                                  CornerRadius="8"
+                                                  Margin="0,4">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <!-- Icon -->
+                                                <Border Grid.Column="0"
+                                                        Width="40"
+                                                        Height="40"
+                                                        CornerRadius="20"
+                                                        Background="{ThemeResource AccentFillColorDefaultBrush}"
+                                                        VerticalAlignment="Center">
+                                                    <FontIcon Glyph="&#xE77B;" 
+                                                              FontSize="20"
+                                                              Foreground="White"/>
+                                                </Border>
+
+                                                <!-- Info -->
+                                                <StackPanel Grid.Column="1"
+                                                            VerticalAlignment="Center"
+                                                            Spacing="4">
+                                                    <TextBlock Text="{x:Bind Nombre}"
+                                                               FontSize="14"
+                                                               FontWeight="SemiBold"/>
+                                                    <TextBlock Text="{x:Bind Llave}"
+                                                               FontSize="12"
+                                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                               FontFamily="Consolas"/>
+                                                </StackPanel>
+
+                                                <!-- Actions -->
+                                                <StackPanel Grid.Column="2"
+                                                            Orientation="Horizontal"
+                                                            Spacing="8"
+                                                            VerticalAlignment="Center">
+                                                    <Button Click="BtnEditarUsuario_Click"
+                                                            Tag="{x:Bind Id}"
+                                                            Width="36"
+                                                            Height="36"
+                                                            Padding="0"
+                                                            ToolTipService.ToolTip="Editar">
+                                                        <FontIcon Glyph="&#xE70F;" FontSize="14"/>
+                                                    </Button>
+                                                    
+                                                    <Button Click="BtnEliminarUsuario_Click"
+                                                            Tag="{x:Bind Id}"
+                                                            Width="36"
+                                                            Height="36"
+                                                            Padding="0"
+                                                            ToolTipService.ToolTip="Eliminar">
+                                                        <FontIcon Glyph="&#xE74D;" FontSize="14"/>
+                                                    </Button>
+                                                </StackPanel>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                </ListView>
                             </StackPanel>
                         </Border>
 

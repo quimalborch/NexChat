@@ -12,6 +12,7 @@ namespace NexChat.Data
         public string idUsuario { get; set; }
         public string nombreUsuario { get; set; } = "Yo";
         public PaletaColoresSeleccionada paletaColoresSeleccionada { get; set; } = PaletaColoresSeleccionada.Automatico;
+        public List<CertifiedUser> usuariosCertificados { get; set; } = new List<CertifiedUser>();
 
         public Configuration() 
         {

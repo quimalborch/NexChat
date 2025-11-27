@@ -1,6 +1,8 @@
 using NexChat.Data;
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -222,6 +224,93 @@ namespace NexChat.Services
             {
                 Console.WriteLine($"Error resetting configuration: {ex.Message}");
             }
+        }
+
+        // CRUD para Usuarios Certificados
+        public async Task<bool> AddCertifiedUserAsync(string nombre, string llave)
+        {
+            if (string.IsNullOrWhiteSpace(nombre) || string.IsNullOrWhiteSpace(llave))
+            {
+                Console.WriteLine("Nombre y llave no pueden estar vacíos.");
+                return false;
+            }
+
+            var configuration = GetOrCreateConfiguration();
+            
+            // Verificar si ya existe un usuario con la misma llave
+            if (configuration.usuariosCertificados.Any(u => u.Llave.Equals(llave, StringComparison.OrdinalIgnoreCase)))
+            {
+                Console.WriteLine("Ya existe un usuario certificado con esta llave.");
+                return false;
+            }
+
+            var newUser = new CertifiedUser(nombre, llave);
+            configuration.usuariosCertificados.Add(newUser);
+
+            return await SaveConfigurationAsync(configuration);
+        }
+
+        public async Task<bool> UpdateCertifiedUserAsync(string userId, string nuevoNombre, string nuevaLlave)
+        {
+            if (string.IsNullOrWhiteSpace(nuevoNombre) || string.IsNullOrWhiteSpace(nuevaLlave))
+            {
+                Console.WriteLine("Nombre y llave no pueden estar vacíos.");
+                return false;
+            }
+
+            var configuration = GetOrCreateConfiguration();
+            var user = configuration.usuariosCertificados.FirstOrDefault(u => u.Id == userId);
+
+            if (user == null)
+            {
+                Console.WriteLine("Usuario certificado no encontrado.");
+                return false;
+            }
+
+            // Verificar si la nueva llave ya existe en otro usuario
+            if (configuration.usuariosCertificados.Any(u => u.Id != userId && u.Llave.Equals(nuevaLlave, StringComparison.OrdinalIgnoreCase)))
+            {
+                Console.WriteLine("Ya existe un usuario certificado con esta llave.");
+                return false;
+            }
+
+            user.Nombre = nuevoNombre;
+            user.Llave = nuevaLlave;
+
+            return await SaveConfigurationAsync(configuration);
+        }
+
+        public async Task<bool> DeleteCertifiedUserAsync(string userId)
+        {
+            var configuration = GetOrCreateConfiguration();
+            var user = configuration.usuariosCertificados.FirstOrDefault(u => u.Id == userId);
+
+            if (user == null)
+            {
+                Console.WriteLine("Usuario certificado no encontrado.");
+                return false;
+            }
+
+            configuration.usuariosCertificados.Remove(user);
+            return await SaveConfigurationAsync(configuration);
+        }
+
+        public List<CertifiedUser> GetCertifiedUsers()
+        {
+            var configuration = GetOrCreateConfiguration();
+            return configuration.usuariosCertificados ?? new List<CertifiedUser>();
+        }
+
+        public CertifiedUser? GetCertifiedUserById(string userId)
+        {
+            var configuration = GetOrCreateConfiguration();
+            return configuration.usuariosCertificados.FirstOrDefault(u => u.Id == userId);
+        }
+
+        public bool IsCertifiedUser(string llave)
+        {
+            var configuration = GetOrCreateConfiguration();
+            return configuration.usuariosCertificados.Any(u => u.Llave.Equals(llave, StringComparison.OrdinalIgnoreCase));
         }
     }
 }

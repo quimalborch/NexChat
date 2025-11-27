@@ -9,6 +9,7 @@ using NexChat.Data;
 using NexChat.Services;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
@@ -33,6 +34,8 @@ namespace NexChat
         private ConfigurationService _configurationService;
         private bool _isLoadingTheme = false;
         private bool _isPasswordVisible = false;
+
+        public ObservableCollection<CertifiedUser> CertifiedUsers { get; set; } = new ObservableCollection<CertifiedUser>();
 
         public ConfigWindow(MainWindow ventanaPrincipal, ConfigurationService configurationService)
         {
@@ -63,18 +66,35 @@ namespace NexChat
         {
             IdentidadContent.Visibility = Visibility.Visible;
             AparienciaContent.Visibility = Visibility.Collapsed;
+            UsuariosCertificadosContent.Visibility = Visibility.Collapsed;
             
             BtnIdentidad.Style = (Style)Application.Current.Resources["NavigationButtonSelectedStyle"];
             BtnApariencia.Style = (Style)Application.Current.Resources["NavigationButtonStyle"];
+            BtnUsuariosCertificados.Style = (Style)Application.Current.Resources["NavigationButtonStyle"];
         }
 
         private void BtnApariencia_Click(object sender, RoutedEventArgs e)
         {
             IdentidadContent.Visibility = Visibility.Collapsed;
             AparienciaContent.Visibility = Visibility.Visible;
+            UsuariosCertificadosContent.Visibility = Visibility.Collapsed;
             
             BtnApariencia.Style = (Style)Application.Current.Resources["NavigationButtonSelectedStyle"];
             BtnIdentidad.Style = (Style)Application.Current.Resources["NavigationButtonStyle"];
+            BtnUsuariosCertificados.Style = (Style)Application.Current.Resources["NavigationButtonStyle"];
+        }
+
+        private void BtnUsuariosCertificados_Click(object sender, RoutedEventArgs e)
+        {
+            IdentidadContent.Visibility = Visibility.Collapsed;
+            AparienciaContent.Visibility = Visibility.Collapsed;
+            UsuariosCertificadosContent.Visibility = Visibility.Visible;
+            
+            BtnUsuariosCertificados.Style = (Style)Application.Current.Resources["NavigationButtonSelectedStyle"];
+            BtnIdentidad.Style = (Style)Application.Current.Resources["NavigationButtonStyle"];
+            BtnApariencia.Style = (Style)Application.Current.Resources["NavigationButtonStyle"];
+
+            LoadCertifiedUsers();
         }
 
         private void TextBoxIdentidad_TextChanged(object sender, TextChangedEventArgs e)
@@ -357,6 +377,266 @@ namespace NexChat
             catch (Exception ex)
             {
                 Console.WriteLine($"Error applying theme: {ex.Message}");
+            }
+        }
+
+        private void LoadCertifiedUsers()
+        {
+            CertifiedUsers.Clear();
+            var users = _configurationService.GetCertifiedUsers();
+            
+            foreach (var user in users)
+            {
+                CertifiedUsers.Add(user);
+            }
+
+            // Mostrar/ocultar empty state y ListView
+            if (CertifiedUsers.Count > 0)
+            {
+                EmptyUsersState.Visibility = Visibility.Collapsed;
+                CertifiedUsersListView.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                EmptyUsersState.Visibility = Visibility.Visible;
+                CertifiedUsersListView.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private async void BtnAgregarUsuario_Click(object sender, RoutedEventArgs e)
+        {
+            string nombre = TextBoxNuevoNombre.Text.Trim();
+            string llave = TextBoxNuevaLlave.Text.Trim();
+
+            if (string.IsNullOrWhiteSpace(nombre))
+            {
+                var dialog = new ContentDialog
+                {
+                    Title = "Campo requerido",
+                    Content = "El nombre del usuario no puede estar vacío.",
+                    CloseButtonText = "Aceptar",
+                    XamlRoot = this.Content.XamlRoot
+                };
+                await dialog.ShowAsync();
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(llave))
+            {
+                var dialog = new ContentDialog
+                {
+                    Title = "Campo requerido",
+                    Content = "La llave de acceso no puede estar vacía.",
+                    CloseButtonText = "Aceptar",
+                    XamlRoot = this.Content.XamlRoot
+                };
+                await dialog.ShowAsync();
+                return;
+            }
+
+            bool success = await _configurationService.AddCertifiedUserAsync(nombre, llave);
+
+            if (success)
+            {
+                // Limpiar campos
+                TextBoxNuevoNombre.Text = string.Empty;
+                TextBoxNuevaLlave.Text = string.Empty;
+
+                // Recargar lista
+                LoadCertifiedUsers();
+
+                var successDialog = new ContentDialog
+                {
+                    Title = "Usuario agregado",
+                    Content = $"El usuario '{nombre}' ha sido agregado correctamente.",
+                    CloseButtonText = "Aceptar",
+                    XamlRoot = this.Content.XamlRoot
+                };
+                await successDialog.ShowAsync();
+            }
+            else
+            {
+                var errorDialog = new ContentDialog
+                {
+                    Title = "Error",
+                    Content = "No se pudo agregar el usuario. Verifica que la llave no esté duplicada.",
+                    CloseButtonText = "Aceptar",
+                    XamlRoot = this.Content.XamlRoot
+                };
+                await errorDialog.ShowAsync();
+            }
+        }
+
+        private async void BtnEditarUsuario_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button button && button.Tag is string userId)
+            {
+                var user = _configurationService.GetCertifiedUserById(userId);
+                if (user == null)
+                {
+                    var notFoundDialog = new ContentDialog
+                    {
+                        Title = "Error",
+                        Content = "Usuario no encontrado.",
+                        CloseButtonText = "Aceptar",
+                        XamlRoot = this.Content.XamlRoot
+                    };
+                    await notFoundDialog.ShowAsync();
+                    return;
+                }
+
+                // Crear un panel con campos de entrada
+                var stackPanel = new StackPanel { Spacing = 12 };
+                
+                var nombreTextBox = new TextBox
+                {
+                    PlaceholderText = "Nombre del usuario",
+                    Text = user.Nombre,
+                    MaxLength = 50
+                };
+                
+                var llaveTextBox = new TextBox
+                {
+                    PlaceholderText = "Llave de acceso",
+                    Text = user.Llave,
+                    MaxLength = 100
+                };
+
+                stackPanel.Children.Add(new TextBlock 
+                { 
+                    Text = "Nombre:", 
+                    FontWeight = new Windows.UI.Text.FontWeight { Weight = 600 },
+                    Margin = new Thickness(0, 0, 0, 4)
+                });
+                stackPanel.Children.Add(nombreTextBox);
+                
+                stackPanel.Children.Add(new TextBlock 
+                { 
+                    Text = "Llave:", 
+                    FontWeight = new Windows.UI.Text.FontWeight { Weight = 600 },
+                    Margin = new Thickness(0, 8, 0, 4)
+                });
+                stackPanel.Children.Add(llaveTextBox);
+
+                var editDialog = new ContentDialog
+                {
+                    Title = "Editar usuario certificado",
+                    Content = stackPanel,
+                    PrimaryButtonText = "Guardar",
+                    CloseButtonText = "Cancelar",
+                    XamlRoot = this.Content.XamlRoot,
+                    DefaultButton = ContentDialogButton.Primary
+                };
+
+                var result = await editDialog.ShowAsync();
+
+                if (result == ContentDialogResult.Primary)
+                {
+                    string nuevoNombre = nombreTextBox.Text.Trim();
+                    string nuevaLlave = llaveTextBox.Text.Trim();
+
+                    if (string.IsNullOrWhiteSpace(nuevoNombre) || string.IsNullOrWhiteSpace(nuevaLlave))
+                    {
+                        var errorDialog = new ContentDialog
+                        {
+                            Title = "Campos requeridos",
+                            Content = "El nombre y la llave no pueden estar vacíos.",
+                            CloseButtonText = "Aceptar",
+                            XamlRoot = this.Content.XamlRoot
+                        };
+                        await errorDialog.ShowAsync();
+                        return;
+                    }
+
+                    bool success = await _configurationService.UpdateCertifiedUserAsync(userId, nuevoNombre, nuevaLlave);
+
+                    if (success)
+                    {
+                        LoadCertifiedUsers();
+
+                        var successDialog = new ContentDialog
+                        {
+                            Title = "Usuario actualizado",
+                            Content = $"Los datos de '{nuevoNombre}' han sido actualizados correctamente.",
+                            CloseButtonText = "Aceptar",
+                            XamlRoot = this.Content.XamlRoot
+                        };
+                        await successDialog.ShowAsync();
+                    }
+                    else
+                    {
+                        var errorDialog = new ContentDialog
+                        {
+                            Title = "Error",
+                            Content = "No se pudo actualizar el usuario. Verifica que la llave no esté duplicada.",
+                            CloseButtonText = "Aceptar",
+                            XamlRoot = this.Content.XamlRoot
+                        };
+                        await errorDialog.ShowAsync();
+                    }
+                }
+            }
+        }
+
+        private async void BtnEliminarUsuario_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button button && button.Tag is string userId)
+            {
+                var user = _configurationService.GetCertifiedUserById(userId);
+                if (user == null)
+                {
+                    var notFoundDialog = new ContentDialog
+                    {
+                        Title = "Error",
+                        Content = "Usuario no encontrado.",
+                        CloseButtonText = "Aceptar",
+                        XamlRoot = this.Content.XamlRoot
+                    };
+                    await notFoundDialog.ShowAsync();
+                    return;
+                }
+
+                var confirmDialog = new ContentDialog
+                {
+                    Title = "Confirmar eliminación",
+                    Content = $"¿Estás seguro de que deseas eliminar al usuario '{user.Nombre}'? Esta acción no se puede deshacer.",
+                    PrimaryButtonText = "Eliminar",
+                    CloseButtonText = "Cancelar",
+                    XamlRoot = this.Content.XamlRoot,
+                    DefaultButton = ContentDialogButton.Close
+                };
+
+                var result = await confirmDialog.ShowAsync();
+
+                if (result == ContentDialogResult.Primary)
+                {
+                    bool success = await _configurationService.DeleteCertifiedUserAsync(userId);
+
+                    if (success)
+                    {
+                        LoadCertifiedUsers();
+
+                        var successDialog = new ContentDialog
+                        {
+                            Title = "Usuario eliminado",
+                            Content = $"El usuario '{user.Nombre}' ha sido eliminado correctamente.",
+                            CloseButtonText = "Aceptar",
+                            XamlRoot = this.Content.XamlRoot
+                        };
+                        await successDialog.ShowAsync();
+                    }
+                    else
+                    {
+                        var errorDialog = new ContentDialog
+                        {
+                            Title = "Error",
+                            Content = "No se pudo eliminar el usuario. Inténtalo de nuevo.",
+                            CloseButtonText = "Aceptar",
+                            XamlRoot = this.Content.XamlRoot
+                        };
+                        await errorDialog.ShowAsync();
+                    }
+                }
             }
         }
 
