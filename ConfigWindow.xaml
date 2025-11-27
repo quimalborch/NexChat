@@ -106,17 +106,49 @@
                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 </StackPanel>
                                 
-                                <Border Background="{ThemeResource ControlFillColorDefaultBrush}"
-                                        BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
-                                        BorderThickness="1"
-                                        CornerRadius="4"
-                                        Padding="12,8">
-                                    <TextBlock x:Name="TextGuildUsuario" 
-                                               Text="XXXXXXXXXX"
-                                               FontFamily="Consolas"
-                                               FontSize="14"
-                                               IsTextSelectionEnabled="True"/>
-                                </Border>
+                                <Grid ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    
+                                    <PasswordBox x:Name="PasswordBoxGuildUsuario" 
+                                                 Grid.Column="0"
+                                                 Password="XXXXXXXXXX"
+                                                 FontFamily="Consolas"
+                                                 FontSize="14"
+                                                 IsTabStop="False"
+                                                 IsEnabled="False"
+                                                 PasswordRevealMode="Hidden"
+                                                 VerticalAlignment="Center"
+                                                 VerticalContentAlignment="Center"/>
+                                    
+                                    <Button x:Name="BtnTogglePasswordVisibility"
+                                            Grid.Column="1"
+                                            Click="BtnTogglePasswordVisibility_Click"
+                                            Width="36"
+                                            Height="36"
+                                            Padding="0"
+                                            VerticalAlignment="Center"
+                                            ToolTipService.ToolTip="Mostrar/Ocultar ID">
+                                        <FontIcon x:Name="IconEye" 
+                                                  Glyph="&#xED1A;" 
+                                                  FontSize="16"/>
+                                    </Button>
+                                    
+                                    <Button x:Name="BtnCopyUserId"
+                                            Grid.Column="2"
+                                            Click="BtnCopyUserId_Click"
+                                            Width="36"
+                                            Height="36"
+                                            Padding="0"
+                                            VerticalAlignment="Center"
+                                            ToolTipService.ToolTip="Copiar al portapapeles">
+                                        <FontIcon Glyph="&#xE8C8;" 
+                                                  FontSize="16"/>
+                                    </Button>
+                                </Grid>
                             </StackPanel>
                         </Border>
 

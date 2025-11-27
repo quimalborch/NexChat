@@ -2,7 +2,8 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
-    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+	<AssemblyVersion>1.0.2</AssemblyVersion>
+	<TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>NexChat</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <Platforms>x86;x64;ARM64</Platforms>
@@ -83,6 +84,5 @@
     <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">True</PublishReadyToRun>
     <!-- Deshabilitar trimming para evitar problemas con JSON serialization -->
     <PublishTrimmed>False</PublishTrimmed>
-    <AssemblyVersion>1.0.1</AssemblyVersion>
   </PropertyGroup>
 </Project>

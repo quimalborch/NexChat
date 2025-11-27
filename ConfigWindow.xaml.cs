@@ -32,6 +32,7 @@ namespace NexChat
         private MainWindow _ventanaPrincipal;
         private ConfigurationService _configurationService;
         private bool _isLoadingTheme = false;
+        private bool _isPasswordVisible = false;
 
         public ConfigWindow(MainWindow ventanaPrincipal, ConfigurationService configurationService)
         {
@@ -153,7 +154,7 @@ namespace NexChat
             }
             else
             {
-                TextGuildUsuario.Text = "No configurado";
+                PasswordBoxGuildUsuario.Password = "No configurado";
             }
 
             LoadThemeOptions();
@@ -164,8 +165,46 @@ namespace NexChat
             var configuration = _configurationService.CurrentConfiguration;
             if (configuration != null)
             {
-                TextGuildUsuario.Text = configuration.idUsuario.ToString();
+                PasswordBoxGuildUsuario.Password = configuration.idUsuario.ToString();
                 TextBoxIdentidad.Text = configuration.nombreUsuario;
+            }
+        }
+
+        private void BtnTogglePasswordVisibility_Click(object sender, RoutedEventArgs e)
+        {
+            _isPasswordVisible = !_isPasswordVisible;
+            
+            if (_isPasswordVisible)
+            {
+                PasswordBoxGuildUsuario.IsEnabled = true;
+                PasswordBoxGuildUsuario.PasswordRevealMode = PasswordRevealMode.Visible;
+                IconEye.Glyph = "\uF78D";
+            }
+            else
+            {
+                PasswordBoxGuildUsuario.IsEnabled = false;
+                PasswordBoxGuildUsuario.PasswordRevealMode = PasswordRevealMode.Hidden;
+                IconEye.Glyph = "\uED1A";
+            }
+        }
+
+        private async void BtnCopyUserId_Click(object sender, RoutedEventArgs e)
+        {
+            var configuration = _configurationService.CurrentConfiguration;
+            if (configuration != null)
+            {
+                var dataPackage = new Windows.ApplicationModel.DataTransfer.DataPackage();
+                dataPackage.SetText(configuration.idUsuario.ToString());
+                Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(dataPackage);
+
+                var dialog = new ContentDialog
+                {
+                    Title = "ID copiado",
+                    Content = "El ID de usuario ha sido copiado al portapapeles.",
+                    CloseButtonText = "Aceptar",
+                    XamlRoot = this.Content.XamlRoot
+                };
+                await dialog.ShowAsync();
             }
         }
 
