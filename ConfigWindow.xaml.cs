@@ -32,6 +32,7 @@ namespace NexChat
     {
         private MainWindow _ventanaPrincipal;
         private ConfigurationService _configurationService;
+        private CloudflaredService _cloudflaredService;
         private bool _isLoadingTheme = false;
         private bool _isPasswordVisible = false;
 
@@ -42,6 +43,7 @@ namespace NexChat
             InitializeComponent();
             _ventanaPrincipal = ventanaPrincipal;
             _configurationService = configurationService;
+            _cloudflaredService = new CloudflaredService();
             
             // Configurar tamaño de la ventana
             var size = new Windows.Graphics.SizeInt32();
@@ -67,10 +69,12 @@ namespace NexChat
             IdentidadContent.Visibility = Visibility.Visible;
             AparienciaContent.Visibility = Visibility.Collapsed;
             UsuariosCertificadosContent.Visibility = Visibility.Collapsed;
+            CloudflareContent.Visibility = Visibility.Collapsed;
             
             BtnIdentidad.Style = (Style)Application.Current.Resources["NavigationButtonSelectedStyle"];
             BtnApariencia.Style = (Style)Application.Current.Resources["NavigationButtonStyle"];
             BtnUsuariosCertificados.Style = (Style)Application.Current.Resources["NavigationButtonStyle"];
+            BtnCloudflare.Style = (Style)Application.Current.Resources["NavigationButtonStyle"];
         }
 
         private void BtnApariencia_Click(object sender, RoutedEventArgs e)
@@ -78,10 +82,12 @@ namespace NexChat
             IdentidadContent.Visibility = Visibility.Collapsed;
             AparienciaContent.Visibility = Visibility.Visible;
             UsuariosCertificadosContent.Visibility = Visibility.Collapsed;
+            CloudflareContent.Visibility = Visibility.Collapsed;
             
             BtnApariencia.Style = (Style)Application.Current.Resources["NavigationButtonSelectedStyle"];
             BtnIdentidad.Style = (Style)Application.Current.Resources["NavigationButtonStyle"];
             BtnUsuariosCertificados.Style = (Style)Application.Current.Resources["NavigationButtonStyle"];
+            BtnCloudflare.Style = (Style)Application.Current.Resources["NavigationButtonStyle"];
         }
 
         private void BtnUsuariosCertificados_Click(object sender, RoutedEventArgs e)
@@ -89,12 +95,29 @@ namespace NexChat
             IdentidadContent.Visibility = Visibility.Collapsed;
             AparienciaContent.Visibility = Visibility.Collapsed;
             UsuariosCertificadosContent.Visibility = Visibility.Visible;
+            CloudflareContent.Visibility = Visibility.Collapsed;
             
             BtnUsuariosCertificados.Style = (Style)Application.Current.Resources["NavigationButtonSelectedStyle"];
             BtnIdentidad.Style = (Style)Application.Current.Resources["NavigationButtonStyle"];
             BtnApariencia.Style = (Style)Application.Current.Resources["NavigationButtonStyle"];
+            BtnCloudflare.Style = (Style)Application.Current.Resources["NavigationButtonStyle"];
 
             LoadCertifiedUsers();
+        }
+
+        private async void BtnCloudflare_Click(object sender, RoutedEventArgs e)
+        {
+            IdentidadContent.Visibility = Visibility.Collapsed;
+            AparienciaContent.Visibility = Visibility.Collapsed;
+            UsuariosCertificadosContent.Visibility = Visibility.Collapsed;
+            CloudflareContent.Visibility = Visibility.Visible;
+            
+            BtnCloudflare.Style = (Style)Application.Current.Resources["NavigationButtonSelectedStyle"];
+            BtnIdentidad.Style = (Style)Application.Current.Resources["NavigationButtonStyle"];
+            BtnApariencia.Style = (Style)Application.Current.Resources["NavigationButtonStyle"];
+            BtnUsuariosCertificados.Style = (Style)Application.Current.Resources["NavigationButtonStyle"];
+
+            LoadCloudflareStatus();
         }
 
         private void TextBoxIdentidad_TextChanged(object sender, TextChangedEventArgs e)
@@ -699,6 +722,361 @@ namespace NexChat
                     }
                 }
             }
+        }
+
+        private void LoadCloudflareStatus()
+        {
+            try
+            {
+                bool isInstalled = _cloudflaredService.IsExecutablePresent();
+
+                if (isInstalled)
+                {
+                    // Cloudflare está instalado
+                    CloudflareStatusIcon.Background = (Brush)Application.Current.Resources["SystemFillColorSuccessBrush"];
+                    CloudflareStatusIconGlyph.Glyph = "\uE73E"; // Checkmark
+                    CloudflareStatusText.Text = "Cloudflare instalado";
+                    CloudflareStatusDescription.Text = "El servicio está listo para usar";
+
+                    // Mostrar información del ejecutable
+                    CloudflareInfoCard.Visibility = Visibility.Visible;
+                    LoadExecutableInfo();
+
+                    // Mostrar botones de desinstalar y verificar actualizaciones
+                    BtnInstallCloudflare.Visibility = Visibility.Collapsed;
+                    BtnUninstallCloudflare.Visibility = Visibility.Visible;
+                    BtnCheckUpdateCloudflare.Visibility = Visibility.Visible;
+                }
+                else
+                {
+                    // Cloudflare NO está instalado
+                    CloudflareStatusIcon.Background = (Brush)Application.Current.Resources["SystemFillColorCautionBrush"];
+                    CloudflareStatusIconGlyph.Glyph = "\uE7BA"; // Warning
+                    CloudflareStatusText.Text = "Cloudflare no instalado";
+                    CloudflareStatusDescription.Text = "Instala Cloudflare para habilitar conexiones P2P";
+
+                    // Ocultar información del ejecutable
+                    CloudflareInfoCard.Visibility = Visibility.Collapsed;
+
+                    // Mostrar botón de instalar
+                    BtnInstallCloudflare.Visibility = Visibility.Visible;
+                    BtnUninstallCloudflare.Visibility = Visibility.Collapsed;
+                    BtnCheckUpdateCloudflare.Visibility = Visibility.Collapsed;
+
+                    InstallButtonIcon.Glyph = "\uE896"; // Download
+                    InstallButtonText.Text = "Instalar Cloudflare";
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading Cloudflare status: {ex.Message}");
+                
+                CloudflareStatusIcon.Background = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"];
+                CloudflareStatusIconGlyph.Glyph = "\uE783"; // Error
+                CloudflareStatusText.Text = "Error al verificar estado";
+                CloudflareStatusDescription.Text = "No se pudo verificar el estado de Cloudflare";
+            }
+        }
+
+        private void LoadExecutableInfo()
+        {
+            try
+            {
+                string execPath = _cloudflaredService.GetExecutablePath();
+                
+                if (!File.Exists(execPath))
+                {
+                    CloudflareInfoCard.Visibility = Visibility.Collapsed;
+                    return;
+                }
+
+                FileInfo fileInfo = new FileInfo(execPath);
+
+                // Obtener versión del archivo (si tiene información de versión)
+                string version = "N/A";
+                try
+                {
+                    var versionInfo = System.Diagnostics.FileVersionInfo.GetVersionInfo(execPath);
+                    if (!string.IsNullOrEmpty(versionInfo.FileVersion))
+                    {
+                        version = versionInfo.FileVersion;
+                    }
+                }
+                catch
+                {
+                    version = "No disponible";
+                }
+
+                // Calcular hash SHA256
+                string hash = "Calculando...";
+                CloudflareHash.Text = hash;
+                
+                // Calcular hash en segundo plano para no bloquear UI
+                _ = System.Threading.Tasks.Task.Run(async () =>
+                {
+                    try
+                    {
+                        using var sha256 = System.Security.Cryptography.SHA256.Create();
+                        using var stream = File.OpenRead(execPath);
+                        byte[] hashBytes = await System.Threading.Tasks.Task.Run(() => sha256.ComputeHash(stream));
+                        string calculatedHash = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
+                        
+                        DispatcherQueue.TryEnqueue(() =>
+                        {
+                            CloudflareHash.Text = calculatedHash;
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        DispatcherQueue.TryEnqueue(() =>
+                        {
+                            CloudflareHash.Text = $"Error: {ex.Message}";
+                        });
+                    }
+                });
+
+                // Actualizar UI
+                CloudflareVersion.Text = version;
+                CloudflareFileSize.Text = FormatBytes(fileInfo.Length);
+                CloudflareLastModified.Text = fileInfo.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading executable info: {ex.Message}");
+                CloudflareVersion.Text = "Error";
+                CloudflareFileSize.Text = "Error";
+                CloudflareLastModified.Text = "Error";
+                CloudflareHash.Text = "Error";
+            }
+        }
+
+        private async void BtnInstallCloudflare_Click(object sender, RoutedEventArgs e)
+        {
+            // Verificar si necesita actualización
+            bool needsUpdate = await _cloudflaredService.NeedsUpdate();
+            
+            if (!needsUpdate && _cloudflaredService.IsExecutablePresent())
+            {
+                var alreadyInstalledDialog = new ContentDialog
+                {
+                    Title = "Ya instalado",
+                    Content = "Cloudflare ya está instalado y actualizado.",
+                    CloseButtonText = "Aceptar",
+                    XamlRoot = this.Content.XamlRoot
+                };
+                await alreadyInstalledDialog.ShowAsync();
+                return;
+            }
+
+            // Confirmar instalación
+            string action = _cloudflaredService.IsExecutablePresent() ? "actualizar" : "instalar";
+            var confirmDialog = new ContentDialog
+            {
+                Title = $"Confirmar {action}",
+                Content = $"¿Deseas {action} Cloudflare Service? Esto puede tardar unos minutos.",
+                PrimaryButtonText = "Continuar",
+                CloseButtonText = "Cancelar",
+                XamlRoot = this.Content.XamlRoot,
+                DefaultButton = ContentDialogButton.Primary
+            };
+
+            var result = await confirmDialog.ShowAsync();
+            if (result != ContentDialogResult.Primary)
+                return;
+
+            // Deshabilitar botón y cambiar texto
+            BtnInstallCloudflare.IsEnabled = false;
+            InstallButtonText.Text = "Descargando...";
+
+            try
+            {
+                bool success = await _cloudflaredService.DownloadExecutable();
+
+                if (success)
+                {
+                    var successDialog = new ContentDialog
+                    {
+                        Title = "Instalación exitosa",
+                        Content = $"Cloudflare se ha {action}do correctamente.",
+                        CloseButtonText = "Aceptar",
+                        XamlRoot = this.Content.XamlRoot
+                    };
+                    await successDialog.ShowAsync();
+
+                    // Recargar estado
+                    LoadCloudflareStatus();
+                }
+                else
+                {
+                    var errorDialog = new ContentDialog
+                    {
+                        Title = "Error",
+                        Content = $"No se pudo {action} Cloudflare. Verifica tu conexión a internet e intenta nuevamente.",
+                        CloseButtonText = "Aceptar",
+                        XamlRoot = this.Content.XamlRoot
+                    };
+                    await errorDialog.ShowAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error installing Cloudflare: {ex.Message}");
+                
+                var errorDialog = new ContentDialog
+                {
+                    Title = "Error",
+                    Content = $"Error al {action} Cloudflare: {ex.Message}",
+                    CloseButtonText = "Aceptar",
+                    XamlRoot = this.Content.XamlRoot
+                };
+                await errorDialog.ShowAsync();
+            }
+            finally
+            {
+                BtnInstallCloudflare.IsEnabled = true;
+                InstallButtonText.Text = _cloudflaredService.IsExecutablePresent() ? "Actualizar Cloudflare" : "Instalar Cloudflare";
+            }
+        }
+
+        private async void BtnUninstallCloudflare_Click(object sender, RoutedEventArgs e)
+        {
+            var confirmDialog = new ContentDialog
+            {
+                Title = "Confirmar desinstalación",
+                Content = "¿Estás seguro de que deseas desinstalar Cloudflare Service? No podrás crear conexiones P2P sin él.",
+                PrimaryButtonText = "Desinstalar",
+                CloseButtonText = "Cancelar",
+                XamlRoot = this.Content.XamlRoot,
+                DefaultButton = ContentDialogButton.Close
+            };
+
+            var result = await confirmDialog.ShowAsync();
+            if (result != ContentDialogResult.Primary)
+                return;
+
+            try
+            {
+                string execPath = _cloudflaredService.GetExecutablePath();
+                
+                if (File.Exists(execPath))
+                {
+                    File.Delete(execPath);
+                    
+                    // También eliminar backup si existe
+                    string backupPath = execPath + ".backup";
+                    if (File.Exists(backupPath))
+                    {
+                        File.Delete(backupPath);
+                    }
+
+                    var successDialog = new ContentDialog
+                    {
+                        Title = "Desinstalación exitosa",
+                        Content = "Cloudflare ha sido desinstalado correctamente.",
+                        CloseButtonText = "Aceptar",
+                        XamlRoot = this.Content.XamlRoot
+                    };
+                    await successDialog.ShowAsync();
+
+                    // Recargar estado
+                    LoadCloudflareStatus();
+                }
+                else
+                {
+                    var notFoundDialog = new ContentDialog
+                    {
+                        Title = "No encontrado",
+                        Content = "El ejecutable de Cloudflare no se encuentra instalado.",
+                        CloseButtonText = "Aceptar",
+                        XamlRoot = this.Content.XamlRoot
+                    };
+                    await notFoundDialog.ShowAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error uninstalling Cloudflare: {ex.Message}");
+                
+                var errorDialog = new ContentDialog
+                {
+                    Title = "Error",
+                    Content = $"Error al desinstalar Cloudflare: {ex.Message}",
+                    CloseButtonText = "Aceptar",
+                    XamlRoot = this.Content.XamlRoot
+                };
+                await errorDialog.ShowAsync();
+            }
+        }
+
+        private async void BtnCheckUpdateCloudflare_Click(object sender, RoutedEventArgs e)
+        {
+            BtnCheckUpdateCloudflare.IsEnabled = false;
+            
+            try
+            {
+                bool needsUpdate = await _cloudflaredService.NeedsUpdate();
+
+                if (needsUpdate)
+                {
+                    var updateDialog = new ContentDialog
+                    {
+                        Title = "Actualización disponible",
+                        Content = "Hay una nueva versión de Cloudflare disponible. ¿Deseas actualizar ahora?",
+                        PrimaryButtonText = "Actualizar",
+                        CloseButtonText = "Más tarde",
+                        XamlRoot = this.Content.XamlRoot,
+                        DefaultButton = ContentDialogButton.Primary
+                    };
+
+                    var result = await updateDialog.ShowAsync();
+                    if (result == ContentDialogResult.Primary)
+                    {
+                        // Trigger installation (which will update)
+                        BtnInstallCloudflare_Click(sender, e);
+                    }
+                }
+                else
+                {
+                    var upToDateDialog = new ContentDialog
+                    {
+                        Title = "Actualizado",
+                        Content = "Cloudflare está actualizado a la última versión.",
+                        CloseButtonText = "Aceptar",
+                        XamlRoot = this.Content.XamlRoot
+                    };
+                    await upToDateDialog.ShowAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error checking for updates: {ex.Message}");
+                
+                var errorDialog = new ContentDialog
+                {
+                    Title = "Error",
+                    Content = $"Error al verificar actualizaciones: {ex.Message}",
+                    CloseButtonText = "Aceptar",
+                    XamlRoot = this.Content.XamlRoot
+                };
+                await errorDialog.ShowAsync();
+            }
+            finally
+            {
+                BtnCheckUpdateCloudflare.IsEnabled = true;
+            }
+        }
+
+        private string FormatBytes(long bytes)
+        {
+            string[] sizes = { "B", "KB", "MB", "GB" };
+            double len = bytes;
+            int order = 0;
+            while (len >= 1024 && order < sizes.Length - 1)
+            {
+                order++;
+                len = len / 1024;
+            }
+            return $"{len:0.##} {sizes[order]}";
         }
 
         private class ThemeOption

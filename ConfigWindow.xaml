@@ -75,6 +75,15 @@
                             <TextBlock Text="Usuarios Certificados" FontSize="14" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
+
+                    <Button x:Name="BtnCloudflare"
+                            Click="BtnCloudflare_Click"
+                            Style="{StaticResource NavigationButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <FontIcon Glyph="&#xE753;" FontSize="16"/>
+                            <TextBlock Text="Cloudflare" FontSize="14" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
             </Grid>
 
@@ -473,6 +482,210 @@
                                         </DataTemplate>
                                     </ListView.ItemTemplate>
                                 </ListView>
+                            </StackPanel>
+                        </Border>
+
+                    </StackPanel>
+
+                    <!-- Cloudflare Content -->
+                    <StackPanel x:Name="CloudflareContent" 
+                                Visibility="Collapsed" 
+                                Spacing="32"
+                                HorizontalAlignment="Stretch"
+                                Margin="32,24">
+                        
+                        <!-- Header Section -->
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Cloudflare Service" 
+                                       FontSize="24" 
+                                       FontWeight="SemiBold"/>
+                            <TextBlock Text="Gestiona el servicio de túnel de Cloudflare para conexiones P2P" 
+                                       FontSize="14"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+
+                        <!-- Status Card -->
+                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="20">
+                            <StackPanel Spacing="16">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Estado del servicio" 
+                                               FontSize="14" 
+                                               FontWeight="SemiBold"/>
+                                    <TextBlock Text="Información sobre la instalación de Cloudflare" 
+                                               FontSize="12"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                </StackPanel>
+                                
+                                <!-- Status Indicator -->
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Border x:Name="CloudflareStatusIcon"
+                                            Grid.Column="0"
+                                            Width="48"
+                                            Height="48"
+                                            CornerRadius="24"
+                                            Background="{ThemeResource SystemFillColorSuccessBrush}"
+                                            VerticalAlignment="Center">
+                                        <FontIcon x:Name="CloudflareStatusIconGlyph"
+                                                  Glyph="&#xE73E;" 
+                                                  FontSize="24"
+                                                  Foreground="White"/>
+                                    </Border>
+
+                                    <StackPanel Grid.Column="1" 
+                                                VerticalAlignment="Center"
+                                                Spacing="4">
+                                        <TextBlock x:Name="CloudflareStatusText"
+                                                   Text="Cloudflare instalado"
+                                                   FontSize="16"
+                                                   FontWeight="SemiBold"/>
+                                        <TextBlock x:Name="CloudflareStatusDescription"
+                                                   Text="El servicio está listo para usar"
+                                                   FontSize="12"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Executable Info Card -->
+                        <Border x:Name="CloudflareInfoCard"
+                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="20"
+                                Visibility="Collapsed">
+                            <StackPanel Spacing="16">
+                                <TextBlock Text="Información del ejecutable" 
+                                           FontSize="14" 
+                                           FontWeight="SemiBold"/>
+                                
+                                <Grid RowSpacing="12">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="140"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- Version -->
+                                    <TextBlock Grid.Row="0" Grid.Column="0"
+                                               Text="Versión:"
+                                               FontSize="13"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <TextBlock x:Name="CloudflareVersion"
+                                               Grid.Row="0" Grid.Column="1"
+                                               Text="Cargando..."
+                                               FontSize="13"
+                                               FontFamily="Consolas"/>
+
+                                    <!-- File Size -->
+                                    <TextBlock Grid.Row="1" Grid.Column="0"
+                                               Text="Tamaño:"
+                                               FontSize="13"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <TextBlock x:Name="CloudflareFileSize"
+                                               Grid.Row="1" Grid.Column="1"
+                                               Text="Cargando..."
+                                               FontSize="13"
+                                               FontFamily="Consolas"/>
+
+                                    <!-- Last Modified -->
+                                    <TextBlock Grid.Row="2" Grid.Column="0"
+                                               Text="Última modificación:"
+                                               FontSize="13"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <TextBlock x:Name="CloudflareLastModified"
+                                               Grid.Row="2" Grid.Column="1"
+                                               Text="Cargando..."
+                                               FontSize="13"
+                                               FontFamily="Consolas"/>
+
+                                    <!-- Hash -->
+                                    <TextBlock Grid.Row="3" Grid.Column="0"
+                                               Text="Hash SHA256:"
+                                               FontSize="13"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <TextBlock x:Name="CloudflareHash"
+                                               Grid.Row="3" Grid.Column="1"
+                                               Text="Cargando..."
+                                               FontSize="11"
+                                               FontFamily="Consolas"
+                                               TextWrapping="Wrap"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Actions Card -->
+                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="20">
+                            <StackPanel Spacing="16">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Acciones" 
+                                               FontSize="14" 
+                                               FontWeight="SemiBold"/>
+                                    <TextBlock Text="Gestiona la instalación de Cloudflare Service" 
+                                               FontSize="12"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                </StackPanel>
+                                
+                                <StackPanel Spacing="12">
+                                    <!-- Install/Update Button -->
+                                    <Button x:Name="BtnInstallCloudflare"
+                                            Click="BtnInstallCloudflare_Click"
+                                            Style="{StaticResource AccentButtonStyle}"
+                                            HorizontalAlignment="Stretch"
+                                            Padding="16,12">
+                                        <StackPanel Orientation="Horizontal" Spacing="12">
+                                            <FontIcon x:Name="InstallButtonIcon" 
+                                                      Glyph="&#xE896;" 
+                                                      FontSize="16"/>
+                                            <TextBlock x:Name="InstallButtonText" 
+                                                       Text="Instalar Cloudflare"
+                                                       FontSize="14"/>
+                                        </StackPanel>
+                                    </Button>
+
+                                    <!-- Uninstall Button -->
+                                    <Button x:Name="BtnUninstallCloudflare"
+                                            Click="BtnUninstallCloudflare_Click"
+                                            HorizontalAlignment="Stretch"
+                                            Padding="16,12"
+                                            Visibility="Collapsed">
+                                        <StackPanel Orientation="Horizontal" Spacing="12">
+                                            <FontIcon Glyph="&#xE74D;" FontSize="16"/>
+                                            <TextBlock Text="Desinstalar Cloudflare" FontSize="14"/>
+                                        </StackPanel>
+                                    </Button>
+
+                                    <!-- Check Update Button -->
+                                    <Button x:Name="BtnCheckUpdateCloudflare"
+                                            Click="BtnCheckUpdateCloudflare_Click"
+                                            HorizontalAlignment="Stretch"
+                                            Padding="16,12"
+                                            Visibility="Collapsed">
+                                        <StackPanel Orientation="Horizontal" Spacing="12">
+                                            <FontIcon Glyph="&#xE895;" FontSize="16"/>
+                                            <TextBlock Text="Verificar actualizaciones" FontSize="14"/>
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
                             </StackPanel>
                         </Border>
 
