@@ -379,6 +379,7 @@ namespace NexChat
             if (!_updateManagerResponse.updateAvaliable) return;
 
             ButtonUpdateVersion.Visibility = Visibility.Visible;
+            TextButtonUpdateVersion.Text = $"Descargar actualización ({_updateManagerResponse.version})";
             ToolTipUpdateVersionBtn.Content = $"Descargar nueva actualización ({_updateManagerResponse.version})";
         }
 
@@ -399,13 +400,10 @@ namespace NexChat
             if (result != ContentDialogResult.Primary) return;
 
             ButtonUpdateVersion.IsEnabled = false;
-            ButtonUpdateVersion.Content = "Descargando actualización...";
+            TextButtonUpdateVersion.Text = "Descargando actualización...";
             await _updateManager.ForceUpdate();
             ButtonUpdateVersion.IsEnabled = true;
-            var stackPanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-            var fontIcon = new FontIcon { Glyph = "\xE896", FontSize = 14 };
-            stackPanel.Children.Add(fontIcon);
-            ButtonUpdateVersion.Content = stackPanel;
+            TextButtonUpdateVersion.Text = $"Descargar actualización ({_updateManagerResponse.version})";
             ToolTipUpdateVersionBtn.Content = $"Descargar actualización ({_updateManagerResponse.version})";
         }
 
