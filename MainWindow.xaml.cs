@@ -424,12 +424,14 @@ namespace NexChat
             string currentUserHashed = Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(_configurationService.GetOrCreateConfiguration().idUsuario)));
             bool isMyMessage = message.Sender.Id == currentUserHashed;
 
+            bool isCertified = _configurationService.IsCertifiedUser(message.Sender.Id);
+
             // Grid contenedor para alineación
             var messageGrid = new Grid
             {
                 Margin = new Thickness(0, 5, 0, 5),
                 HorizontalAlignment = isMyMessage ? HorizontalAlignment.Right : HorizontalAlignment.Left,
-                Tag = message.Id // Agregar ID del mensaje para rastreo
+                Tag = message.Id
             };
 
             // Border para la burbuja del mensaje
@@ -449,17 +451,40 @@ namespace NexChat
                 Spacing = 4
             };
 
-            // Nombre del remitente (solo para mensajes recibidos)
+            // Nombre del remitente con icono de verificación (solo para mensajes recibidos)
             if (!isMyMessage && !string.IsNullOrEmpty(message.Sender.Name))
             {
+                // StackPanel horizontal para nombre + icono de verificación
+                var senderHeaderStack = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 4
+                };
+
                 var senderName = new TextBlock
                 {
                     Text = message.Sender.Name,
                     FontSize = 12,
                     FontWeight = new Windows.UI.Text.FontWeight { Weight = 600 },
-                    Foreground = (Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"]
+                    Foreground = (Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"],
+                    VerticalAlignment = VerticalAlignment.Center
                 };
-                contentStack.Children.Add(senderName);
+                senderHeaderStack.Children.Add(senderName);
+
+                // Agregar icono de verificación si el usuario está certificado
+                if (isCertified)
+                {
+                    var verifiedIcon = new FontIcon
+                    {
+                        Glyph = "\uE73E", // Icono de checkmark con círculo (verified)
+                        FontSize = 12,
+                        Foreground = (Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"],
+                        VerticalAlignment = VerticalAlignment.Center
+                    };
+                    senderHeaderStack.Children.Add(verifiedIcon);
+                }
+
+                contentStack.Children.Add(senderHeaderStack);
             }
 
             // Contenido del mensaje
