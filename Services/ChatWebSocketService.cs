@@ -166,6 +166,9 @@ namespace NexChat.Services
                 return false;
             }
 
+            //Pass Sender Id to SHA256 for privacity
+            message.Sender.Id = Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(message.Sender.Id)));
+
             try
             {
                 var messageJson = System.Text.Json.JsonSerializer.Serialize(message);

@@ -1,4 +1,5 @@
-﻿using Microsoft.UI.Xaml;
+﻿using Microsoft.UI;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Data;
@@ -13,10 +14,10 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
+using System.Text;
+using System.Threading.Tasks;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
-using Microsoft.UI;
-using System.Threading.Tasks;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -420,7 +421,8 @@ namespace NexChat
             var messagesPanel = content.FindName("MessagesPanel") as StackPanel;
             if (messagesPanel == null) return;
 
-            bool isMyMessage = message.Sender.Id == _currentUserId;
+            string currentUserHashed = Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(_configurationService.GetOrCreateConfiguration().idUsuario)));
+            bool isMyMessage = message.Sender.Id == currentUserHashed;
 
             // Grid contenedor para alineación
             var messageGrid = new Grid
@@ -511,7 +513,7 @@ namespace NexChat
 
             string messageContent = messageInputBox.Text;
 
-            string senderId = _currentUserId;
+            string senderId = Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(_configurationService.GetOrCreateConfiguration().idUsuario)));
 
             //TODO: Implementar lógica de envío de mensaje a través del ChatService a la red
             var _sender = new Sender(senderId) { Name = RecuperarName() };
