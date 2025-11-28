@@ -1,4 +1,5 @@
-﻿using NexChat.Data;
+﻿using Microsoft.UI.Xaml.Controls;
+using NexChat.Data;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -428,6 +429,13 @@ namespace NexChat.Services
             webServer.CreateMessage += WebServer_CreateMessage;
             if (await webServer.Start(chatId, enableTunnel))
             {
+                if (webServer.TunnelActive is null)
+                {
+                    await StopWebServer(chatId);
+                    SaveChats();
+                    return false;
+                }
+
                 _webServers[chatId] = webServer;
                 chat.IsRunning = true;
                 chat.ServerPort = webServer.Port;

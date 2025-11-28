@@ -864,7 +864,19 @@ namespace NexChat
                 // Por defecto, no habilitar túnel. Puedes cambiarlo a true si deseas
                 // habilitar túnel automáticamente cuando se inicia el servidor
                 bool enableTunnel = true;
-                await _chatService.StartWebServer(chatId, enableTunnel);
+                bool success = await _chatService.StartWebServer(chatId, enableTunnel);
+                
+                if (!success)
+                {
+                    var errorDialog = new ContentDialog
+                    {
+                        Title = "Error",
+                        Content = "No se pudo iniciar la conexión privada con Cloudflare.",
+                        CloseButtonText = "Aceptar",
+                        XamlRoot = this.Content.XamlRoot
+                    };
+                    await errorDialog.ShowAsync();
+                }
             }
         }
 
