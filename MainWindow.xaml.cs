@@ -15,7 +15,9 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
+using Velopack;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
 
@@ -37,25 +39,33 @@ namespace NexChat
         private Chat _selectedChat;
         private string _currentUserId;
         private bool _cloudflareNeedsUpdate = false;
+        private UpdateManager _updateManager;
+        private returnMessageUpdateInfo _updateManagerResponse;
+
+        private bool _isInitialized = false;
 
         public MainWindow()
         {
             InitializeComponent();
             ChatItems = new ObservableCollection<Chat>();
-            
+
             _configurationService = new ConfigurationService();
             _chatConnectorService = new ChatConnectorService();
             _cloudflaredService = new CloudflaredService();
             _chatService = CreateChatService();
-            
+            _updateManager = CreateUpdateManager();
+            _updateManagerResponse = new returnMessageUpdateInfo(false);
+
             _currentUserId = _configurationService.GetUserId();
-            
+
             _chatService.ChatListUpdated += _chatService_ChatListUpdated;
             // Invocar manualmente la actualización después de suscribirse
             _chatService.UpdateHandlerChats();
 
             // Verificar estado de Cloudflare
             _ = CheckCloudflareStatus();
+
+            this.Activated += MainWindow_Activated;
         }
 
         private async System.Threading.Tasks.Task CheckCloudflareStatus()
@@ -63,10 +73,10 @@ namespace NexChat
             try
             {
                 Console.WriteLine("Checking Cloudflare status...");
-                
+
                 // Verificar si necesita actualización
                 _cloudflareNeedsUpdate = await _cloudflaredService.NeedsUpdate();
-                
+
                 // Actualizar UI en el hilo principal
                 DispatcherQueue.TryEnqueue(() =>
                 {
@@ -76,7 +86,7 @@ namespace NexChat
             catch (Exception ex)
             {
                 Console.WriteLine($"Error checking Cloudflare status: {ex.Message}");
-                
+
                 // En caso de error, mostrar botón con estado de error
                 DispatcherQueue.TryEnqueue(() =>
                 {
@@ -85,7 +95,7 @@ namespace NexChat
 
                     var button = content.FindName("CloudflareUpdateButton") as Button;
                     var textBlock = content.FindName("CloudflareButtonText") as TextBlock;
-                    
+
                     if (button != null) button.IsEnabled = false;
                     if (textBlock != null) textBlock.Text = "Error al verificar";
                 });
@@ -99,7 +109,7 @@ namespace NexChat
 
             var button = content.FindName("CloudflareUpdateButton") as Button;
             var textBlock = content.FindName("CloudflareButtonText") as TextBlock;
-            
+
             if (button == null || textBlock == null) return;
 
             if (_cloudflareNeedsUpdate)
@@ -107,8 +117,8 @@ namespace NexChat
                 // Hay actualización disponible o no está descargado
                 button.IsEnabled = true;
                 button.Visibility = Visibility.Visible;
-                textBlock.Text = _cloudflaredService.IsExecutablePresent() 
-                    ? "Actualizar Cloudflare" 
+                textBlock.Text = _cloudflaredService.IsExecutablePresent()
+                    ? "Actualizar Cloudflare"
                     : "Descargar Cloudflare";
                 button.Style = (Style)Application.Current.Resources["AccentButtonStyle"];
             }
@@ -128,7 +138,7 @@ namespace NexChat
 
             var button = content.FindName("CloudflareUpdateButton") as Button;
             var textBlock = content.FindName("CloudflareButtonText") as TextBlock;
-            
+
             if (button == null || textBlock == null) return;
 
             // Deshabilitar el botón mientras se descarga
@@ -138,12 +148,12 @@ namespace NexChat
             try
             {
                 bool success = await _cloudflaredService.DownloadExecutable();
-                
+
                 if (success)
                 {
                     _cloudflareNeedsUpdate = false;
                     textBlock.Text = "Cloudflare actualizado";
-                    
+
                     // Mostrar notificación de éxito
                     var dialog = new ContentDialog
                     {
@@ -158,7 +168,7 @@ namespace NexChat
                 {
                     textBlock.Text = "Error en descarga";
                     button.IsEnabled = true;
-                    
+
                     // Mostrar error
                     var dialog = new ContentDialog
                     {
@@ -175,7 +185,7 @@ namespace NexChat
                 Console.WriteLine($"Error downloading Cloudflare: {ex.Message}");
                 textBlock.Text = "Error en descarga";
                 button.IsEnabled = true;
-                
+
                 var dialog = new ContentDialog
                 {
                     Title = "Error",
@@ -193,7 +203,7 @@ namespace NexChat
             DispatcherQueue.TryEnqueue(() =>
             {
                 Console.WriteLine($"🔄 ChatListUpdated event triggered");
-                
+
                 // Primero, verificar si hay mensajes nuevos para el chat seleccionado
                 if (_selectedChat != null)
                 {
@@ -203,19 +213,19 @@ namespace NexChat
                         Console.WriteLine($"📱 Checking for new messages in selected chat '{updatedChat.Name}'");
                         Console.WriteLine($"   Current chat has {_selectedChat.Messages.Count} messages");
                         Console.WriteLine($"   Updated chat has {updatedChat.Messages.Count} messages");
-                        
+
                         // Obtener el MessagesPanel para verificar qué mensajes ya están en la UI
                         var content = this.Content as FrameworkElement;
                         var messagesPanel = content?.FindName("MessagesPanel") as StackPanel;
                         var messagesScrollViewer = content?.FindName("MessagesScrollViewer") as ScrollViewer;
-                        
+
                         if (messagesPanel != null && messagesScrollViewer != null)
                         {
                             // Verificar si el usuario está al final del scroll ANTES de agregar mensajes
                             bool wasAtBottom = IsScrolledToBottom(messagesScrollViewer);
-                            
+
                             Console.WriteLine($"   User is at bottom: {wasAtBottom}");
-                            
+
                             // Obtener IDs de mensajes que ya están en la UI
                             var existingMessageIds = new HashSet<string>();
                             foreach (var child in messagesPanel.Children)
@@ -225,9 +235,9 @@ namespace NexChat
                                     existingMessageIds.Add(messageId);
                                 }
                             }
-                            
+
                             Console.WriteLine($"   UI currently has {existingMessageIds.Count} messages displayed");
-                            
+
                             // Agregar solo mensajes que NO están en la UI
                             bool newMessagesAdded = false;
                             foreach (var message in updatedChat.Messages)
@@ -239,10 +249,10 @@ namespace NexChat
                                     newMessagesAdded = true;
                                 }
                             }
-                            
+
                             // Actualizar la referencia del _selectedChat con los nuevos mensajes
                             _selectedChat = updatedChat;
-                            
+
                             // Auto-scroll al final SOLO si el usuario estaba al final Y se agregaron mensajes nuevos
                             if (newMessagesAdded && wasAtBottom)
                             {
@@ -257,14 +267,14 @@ namespace NexChat
                         }
                     }
                 }
-                
+
                 // Actualizar la lista de chats en el sidebar
                 ChatItems.Clear();
                 foreach (var chat in e)
                 {
                     ChatItems.Add(chat);
                 }
-                
+
                 Console.WriteLine($"✓ ChatList updated with {e.Count} chats");
             });
         }
@@ -280,15 +290,15 @@ namespace NexChat
             // Obtener posición actual del scroll
             double verticalOffset = scrollViewer.VerticalOffset;
             double scrollableHeight = scrollViewer.ScrollableHeight;
-            
+
             // Considerar que está al final si está dentro de 10 pixels del fondo
             // Esto da un margen de tolerancia para evitar problemas de redondeo
             const double tolerance = 10.0;
-            
+
             bool isAtBottom = (scrollableHeight - verticalOffset) <= tolerance;
-            
+
             Console.WriteLine($"   📏 Scroll position - Offset: {verticalOffset:F2}, Scrollable: {scrollableHeight:F2}, IsAtBottom: {isAtBottom}");
-            
+
             return isAtBottom;
         }
 
@@ -299,7 +309,7 @@ namespace NexChat
         {
             // Esperar a que el layout se actualice
             await Task.Delay(50);
-            
+
             DispatcherQueue.TryEnqueue(() =>
             {
                 var content = this.Content as FrameworkElement;
@@ -310,16 +320,93 @@ namespace NexChat
 
                 // Forzar actualización del layout
                 messagesScrollViewer.UpdateLayout();
-                
+
                 // Hacer scroll al final
                 messagesScrollViewer.ChangeView(null, messagesScrollViewer.ScrollableHeight, null, false);
-                
+
                 Console.WriteLine($"   ✓ Scrolled to bottom - New height: {messagesScrollViewer.ScrollableHeight:F2}");
             });
         }
 
-        private ChatService CreateChatService(){
+        private ChatService CreateChatService()
+        {
             return new ChatService(_cloudflaredService, _chatConnectorService);
+        }
+
+        private async void MainWindow_Activated(object sender, WindowActivatedEventArgs e)
+        {
+            if (!_isInitialized && e.WindowActivationState != WindowActivationState.Deactivated)
+            {
+                _isInitialized = true;
+
+                // Desuscribirse para que solo se ejecute una vez
+                this.Activated -= MainWindow_Activated;
+
+                await InitializeAsync();
+            }
+        }
+
+        private UpdateManager CreateUpdateManager()
+        {
+            return new UpdateManager();
+        }
+
+        private async Task<returnMessageUpdateInfo> LoadUpdateManagerResponse()
+        {
+            return await _updateManager.CheckActualizacionDisponible();
+        }
+
+        private async Task InitializeAsync()
+        {
+            try
+            {
+
+                _updateManagerResponse = await LoadUpdateManagerResponse();
+
+                await CheckVersionAsync();
+
+            }
+            catch (Exception)
+            {
+                throw;
+            }
+        }
+
+        private async Task CheckVersionAsync()
+        {
+            _updateManagerResponse = await _updateManager.CheckActualizacionDisponible();
+
+            if (!_updateManagerResponse.updateAvaliable) return;
+
+            ButtonUpdateVersion.Visibility = Visibility.Visible;
+            ToolTipUpdateVersionBtn.Content = $"Descargar nueva actualización ({_updateManagerResponse.version})";
+        }
+
+        private async void ButtonUpdateVersion_Click(object sender, RoutedEventArgs e)
+        {
+            ContentDialog confirmUpdateVersionDialog = new ContentDialog
+            {
+                Title = $"¿Estás completamente seguro de que deseas actualizar a la versión ({_updateManagerResponse.version})?",
+                Content = "Esta acción reemplazará la versión que estás usando ahora mismo y aplicará todos los cambios incluidos en la nueva actualización.",
+                PrimaryButtonText = $"Actualizar a la nueva versión",
+                CloseButtonText = "Cancelar",
+                XamlRoot = this.Content.XamlRoot,
+                DefaultButton = ContentDialogButton.Primary
+            };
+
+            ContentDialogResult result = await confirmUpdateVersionDialog.ShowAsync();
+
+            if (result != ContentDialogResult.Primary) return;
+
+            ButtonUpdateVersion.IsEnabled = false;
+            ButtonUpdateVersion.Content = "Descargando actualización...";
+            await _updateManager.ForceUpdate();
+            ButtonUpdateVersion.IsEnabled = true;
+            var stackPanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            var fontIcon = new FontIcon { Glyph = "\xE896", FontSize = 14 };
+            stackPanel.Children.Add(fontIcon);
+            ButtonUpdateVersion.Content = stackPanel;
+            ToolTipUpdateVersionBtn.Content = $"Descargar actualización ({_updateManagerResponse.version})";
         }
 
         private void ChatListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -360,7 +447,8 @@ namespace NexChat
             if (!chat.IsInvited)
             {
                 LoadMessages(chat.Messages);
-            } else
+            }
+            else
             {
                 if (chat.CodeInvitation is null) return;
                 LoadMessagesRemote(chat.CodeInvitation);
@@ -406,7 +494,7 @@ namespace NexChat
             if (messagesPanel == null) return;
 
             messagesPanel.Children.Clear();
-            
+
             foreach (var message in messages)
             {
                 AddMessageToUI(message);
@@ -441,7 +529,7 @@ namespace NexChat
                 CornerRadius = new CornerRadius(12),
                 Padding = new Thickness(12, 8, 12, 8),
                 MaxWidth = 600,
-                Background = isMyMessage 
+                Background = isMyMessage
                     ? (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"]
                     : (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"]
             };
@@ -590,7 +678,7 @@ namespace NexChat
             if (!_selectedChat.IsInvited)
             {
                 return _configurationService.GetUserName();
-            } 
+            }
             else
             {
                 return _configurationService.GetUserName();
@@ -615,18 +703,18 @@ namespace NexChat
 
             // Usar AddMessage del ChatService que maneja WebSocket automáticamente
             await _chatService.AddMessage(_selectedChat.Id, message);
-            
+
             // Limpiar input después de enviar
             messageInputBox.Text = string.Empty;
-            
+
             Console.WriteLine($"✓ Message sent to ChatService, waiting for server confirmation");
         }
 
         private void SendMessage(TextBox messageInputBox, Message message)
-        {            
+        {
             // Agregar mensaje al chat usando el servicio
             _chatService.AddMessage(_selectedChat.Id, message);
-            
+
             // Mostrar en la UI
             AddMessageToUI(message);
 
@@ -824,14 +912,14 @@ namespace NexChat
             // Mostrar/ocultar según el estado
             if (playMenuItem != null)
                 playMenuItem.Visibility = (chatItem.IsRunning || chatItem.IsInvited) ? Visibility.Collapsed : Visibility.Visible;
-            
+
             if (stopMenuItem != null)
                 stopMenuItem.Visibility = (!chatItem.IsRunning || chatItem.IsInvited) ? Visibility.Collapsed : Visibility.Visible;
-            
+
             // Mostrar CopyURLMenuItem solo si CodeInvitation no es null y IsInvited es false
             if (copyURLMenuItem != null)
-                copyURLMenuItem.Visibility = (!string.IsNullOrEmpty(chatItem.CodeInvitation) && !chatItem.IsInvited) 
-                    ? Visibility.Visible 
+                copyURLMenuItem.Visibility = (!string.IsNullOrEmpty(chatItem.CodeInvitation) && !chatItem.IsInvited)
+                    ? Visibility.Visible
                     : Visibility.Collapsed;
         }
 
