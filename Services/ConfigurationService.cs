@@ -307,6 +307,12 @@ namespace NexChat.Services
             return configuration.usuariosCertificados.FirstOrDefault(u => u.Id == userId);
         }
 
+        public CertifiedUser? GetCertifiedNameByKey(string llave)
+        {
+            var configuration = GetOrCreateConfiguration();
+            return configuration.usuariosCertificados.FirstOrDefault(u => u.Llave == llave);
+        }
+
         public bool IsCertifiedUser(string llave)
         {
             var configuration = GetOrCreateConfiguration();

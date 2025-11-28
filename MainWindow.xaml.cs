@@ -421,7 +421,8 @@ namespace NexChat
             var messagesPanel = content.FindName("MessagesPanel") as StackPanel;
             if (messagesPanel == null) return;
 
-            string currentUserHashed = Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(_configurationService.GetOrCreateConfiguration().idUsuario)));
+            string currentUserHashed = Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(_configurationService.GetOrCreateConfiguration().idUsuario)))
+;
             bool isMyMessage = message.Sender.Id == currentUserHashed;
 
             bool isCertified = _configurationService.IsCertifiedUser(message.Sender.Id);
@@ -458,12 +459,23 @@ namespace NexChat
                 var senderHeaderStack = new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
-                    Spacing = 4
+                    Spacing = 6
                 };
+
+                string SenderNameLocal = message.Sender.Name;
+
+                if (isCertified && _configurationService is not null)
+                {
+                    var certifiedUser = _configurationService.GetCertifiedNameByKey(message.Sender.Id);
+                    if (certifiedUser is not null)
+                    {
+                        SenderNameLocal = certifiedUser.Nombre;
+                    }
+                }
 
                 var senderName = new TextBlock
                 {
-                    Text = message.Sender.Name,
+                    Text = SenderNameLocal,
                     FontSize = 12,
                     FontWeight = new Windows.UI.Text.FontWeight { Weight = 600 },
                     Foreground = (Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"],
@@ -474,14 +486,33 @@ namespace NexChat
                 // Agregar icono de verificación si el usuario está certificado
                 if (isCertified)
                 {
-                    var verifiedIcon = new FontIcon
+                    // Border circular azul para el fondo del icono
+                    var verifiedBorder = new Border
                     {
-                        Glyph = "\uE73E", // Icono de checkmark con círculo (verified)
-                        FontSize = 12,
-                        Foreground = (Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"],
+                        Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 29, 155, 240)), // Azul similar a Twitter/X
+                        CornerRadius = new CornerRadius(10),
+                        Width = 16,
+                        Height = 16,
                         VerticalAlignment = VerticalAlignment.Center
                     };
-                    senderHeaderStack.Children.Add(verifiedIcon);
+
+                    // FontIcon de checkmark blanco
+                    var verifiedIcon = new FontIcon
+                    {
+                        Glyph = "\uE73E", // Checkmark con círculo
+                        FontSize = 10,
+                        Foreground = new SolidColorBrush(Colors.White),
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center
+                    };
+
+                    // Agregar el icono dentro del border
+                    verifiedBorder.Child = verifiedIcon;
+
+                    // Agregar tooltip
+                    ToolTipService.SetToolTip(verifiedBorder, "Verificado");
+
+                    senderHeaderStack.Children.Add(verifiedBorder);
                 }
 
                 contentStack.Children.Add(senderHeaderStack);

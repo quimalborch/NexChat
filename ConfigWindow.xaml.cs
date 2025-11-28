@@ -171,10 +171,20 @@ namespace NexChat
             if (configuration != null)
             {
                 UpdateUserIdDisplay();
+                UpdatePublicIdDisplay();
             }
             else
             {
                 PasswordBoxGuildUsuario.Password = "No configurado";
+                var textBoxPublicId = this.Content as FrameworkElement;
+                if (textBoxPublicId != null)
+                {
+                    var publicIdBox = textBoxPublicId.FindName("TextBoxPublicId") as TextBox;
+                    if (publicIdBox != null)
+                    {
+                        publicIdBox.Text = "No configurado";
+                    }
+                }
             }
 
             LoadThemeOptions();
@@ -187,6 +197,30 @@ namespace NexChat
             {
                 PasswordBoxGuildUsuario.Password = configuration.idUsuario.ToString();
                 TextBoxIdentidad.Text = configuration.nombreUsuario;
+            }
+        }
+
+        private void UpdatePublicIdDisplay()
+        {
+            var configuration = _configurationService.CurrentConfiguration;
+            if (configuration != null)
+            {
+                // Generar el ID público (hash del ID privado)
+                string publicId = Convert.ToBase64String(
+                    System.Security.Cryptography.SHA256.HashData(
+                        System.Text.Encoding.UTF8.GetBytes(configuration.idUsuario.ToString())
+                    )
+                );
+                
+                var content = this.Content as FrameworkElement;
+                if (content != null)
+                {
+                    var textBoxPublicId = content.FindName("TextBoxPublicId") as TextBox;
+                    if (textBoxPublicId != null)
+                    {
+                        textBoxPublicId.Text = publicId;
+                    }
+                }
             }
         }
 
@@ -221,6 +255,33 @@ namespace NexChat
                 {
                     Title = "ID copiado",
                     Content = "El ID de usuario ha sido copiado al portapapeles.",
+                    CloseButtonText = "Aceptar",
+                    XamlRoot = this.Content.XamlRoot
+                };
+                await dialog.ShowAsync();
+            }
+        }
+
+        private async void BtnCopyPublicId_Click(object sender, RoutedEventArgs e)
+        {
+            var configuration = _configurationService.CurrentConfiguration;
+            if (configuration != null)
+            {
+                // Generar el ID público (hash del ID privado)
+                string publicId = Convert.ToBase64String(
+                    System.Security.Cryptography.SHA256.HashData(
+                        System.Text.Encoding.UTF8.GetBytes(configuration.idUsuario.ToString())
+                    )
+                );
+
+                var dataPackage = new Windows.ApplicationModel.DataTransfer.DataPackage();
+                dataPackage.SetText(publicId);
+                Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(dataPackage);
+
+                var dialog = new ContentDialog
+                {
+                    Title = "ID público copiado",
+                    Content = "El ID público ha sido copiado al portapapeles.",
                     CloseButtonText = "Aceptar",
                     XamlRoot = this.Content.XamlRoot
                 };
