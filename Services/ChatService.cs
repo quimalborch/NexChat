@@ -429,35 +429,55 @@ namespace NexChat.Services
             WebServerService webServer = new WebServerService(_cloudflaredService);
             webServer.ChatListUpdated += WebServer_ChatListUpdated;
             webServer.CreateMessage += WebServer_CreateMessage;
-            if (await webServer.Start(chatId, enableTunnel))
+            
+            bool started = await webServer.Start(chatId, enableTunnel);
+            
+            if (!started)
             {
-                if (webServer.TunnelActive is null)
-                {
-                    await StopWebServer(chatId);
-                    SaveChats();
-                    return false;
-                }
-
-                _webServers[chatId] = webServer;
-                chat.IsRunning = true;
-                chat.ServerPort = webServer.Port;
-                chat.CodeInvitation = $"{GetSubdomain(webServer.TunnelUrl)}";
-                SaveChats();
+                Console.WriteLine($"Failed to start web server for chat '{chat.Name}'");
                 
-                Console.WriteLine($"Web server started for chat '{chat.Name}' on port {webServer.Port}");
-                Console.WriteLine($"WebSocket available at: ws://localhost:{webServer.Port}/ws");
-                
-                if (enableTunnel && webServer.IsTunnelActive)
+                // IMPORTANTE: Limpiar procesos cloudflared si falló el inicio
+                if (_cloudflaredService != null)
                 {
-                    Console.WriteLine($"Cloudflare tunnel active: {webServer.TunnelUrl}");
-                    Console.WriteLine($"WebSocket via tunnel: wss://{GetSubdomain(webServer.TunnelUrl)}.trycloudflare.com/ws");
+                    Console.WriteLine("Forcing cleanup of cloudflared processes after failed start");
+                    _cloudflaredService.ForceCleanupAllProcesses();
                 }
                 
-                return true;
+                return false;
             }
             
-            Console.WriteLine($"Failed to start web server for chat '{chat.Name}'");
-            return false;
+            if (webServer.TunnelActive is null)
+            {
+                Console.WriteLine($"Tunnel not active for chat '{chat.Name}', stopping server");
+                await StopWebServer(chatId);
+                
+                // IMPORTANTE: Limpiar procesos cloudflared si el túnel no se activó
+                if (_cloudflaredService != null)
+                {
+                    Console.WriteLine("Forcing cleanup of cloudflared processes after tunnel failure");
+                    _cloudflaredService.ForceCleanupAllProcesses();
+                }
+                
+                SaveChats();
+                return false;
+            }
+
+            _webServers[chatId] = webServer;
+            chat.IsRunning = true;
+            chat.ServerPort = webServer.Port;
+            chat.CodeInvitation = $"{GetSubdomain(webServer.TunnelUrl)}";
+            SaveChats();
+            
+            Console.WriteLine($"Web server started for chat '{chat.Name}' on port {webServer.Port}");
+            Console.WriteLine($"WebSocket available at: ws://localhost:{webServer.Port}/ws");
+            
+            if (enableTunnel && webServer.IsTunnelActive)
+            {
+                Console.WriteLine($"Cloudflare tunnel active: {webServer.TunnelUrl}");
+                Console.WriteLine($"WebSocket via tunnel: wss://{GetSubdomain(webServer.TunnelUrl)}.trycloudflare.com/ws");
+            }
+            
+            return true;
         }
 
         private bool WebServer_CreateMessage(string chatId, Message message)

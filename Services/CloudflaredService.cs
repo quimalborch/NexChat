@@ -320,42 +320,148 @@ namespace NexChat.Services
                 };
                 
                 processLocal.Start();
-                _processList.Add(ChatId, processLocal);
-
-                Log.Debug("Cloudflared process started with PID: {ProcessId}", processLocal.Id);
-
+                
+                int processId = processLocal.Id;
+                Log.Debug("Cloudflared process started with PID: {ProcessId}", processId);
+                
+                // IMPORTANTE: NO agregar a _processList todavía, solo si tiene éxito
+                
                 // Timeout más largo para dar tiempo a cloudflared a conectar (30 segundos)
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-                string? url = await GetUrlTunnelAsync(processLocal, cts.Token);
+                string? url = null;
+                
+                try
+                {
+                    url = await GetUrlTunnelAsync(processLocal, cts.Token);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "Error getting tunnel URL for ChatId: {ChatId}", ChatId);
+                }
 
                 if (string.IsNullOrWhiteSpace(url))
                 {
-                    Log.Error("Could not retrieve tunnel URL for ChatId: {ChatId}", ChatId);
+                    Log.Error("Could not retrieve tunnel URL for ChatId: {ChatId}. Killing process immediately.", ChatId);
                     
-                    // Limpiar proceso fallido
-                    await TryCloseTunnel(ChatId);
+                    // CRÍTICO: Matar el proceso INMEDIATAMENTE si no se obtuvo la URL
+                    try
+                    {
+                        if (!processLocal.HasExited)
+                        {
+                            Log.Warning("Killing failed cloudflared process PID: {ProcessId}", processId);
+                            processLocal.Kill();
+                            
+                            // Esperar a que termine
+                            bool exited = processLocal.WaitForExit(5000);
+                            
+                            if (!exited)
+                            {
+                                Log.Error("Process {ProcessId} did not exit after Kill(). Attempting forced termination...", processId);
+                                
+                                // Intentar terminar usando taskkill como último recurso
+                                try
+                                {
+                                    var killProcess = new Process
+                                    {
+                                        StartInfo = new ProcessStartInfo
+                                        {
+                                            FileName = "taskkill",
+                                            Arguments = $"/F /PID {processId}",
+                                            UseShellExecute = false,
+                                            CreateNoWindow = true
+                                        }
+                                    };
+                                    killProcess.Start();
+                                    killProcess.WaitForExit(3000);
+                                    Log.Information("Forced process termination using taskkill for PID: {ProcessId}", processId);
+                                }
+                                catch (Exception killEx)
+                                {
+                                    Log.Error(killEx, "Could not force kill process using taskkill");
+                                }
+                            }
+                            else
+                            {
+                                Log.Information("Process {ProcessId} terminated successfully", processId);
+                            }
+                        }
+                        else
+                        {
+                            Log.Information("Process {ProcessId} already exited", processId);
+                        }
+                    }
+                    catch (Exception killEx)
+                    {
+                        Log.Error(killEx, "Error killing failed cloudflared process PID: {ProcessId}", processId);
+                    }
+                    finally
+                    {
+                        // Siempre dispose del proceso
+                        try
+                        {
+                            processLocal.Dispose();
+                        }
+                        catch (Exception disposeEx)
+                        {
+                            Log.Warning(disposeEx, "Error disposing failed process");
+                        }
+                    }
                     
                     return new OpenTunnelConnection(false, "No se pudo establecer la conexión con Cloudflare. El servicio puede estar caído o el túnel no se pudo crear.");
                 }
 
+                // ÉXITO: Agregar a la lista SOLO si obtuvimos la URL correctamente
+                _processList.Add(ChatId, processLocal);
+                
                 Log.Information("Tunnel opened successfully. URL: {TunnelUrl}", url);
 
                 return new OpenTunnelConnection(true) { TunnelUrl = url };
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "Error opening tunnel for ChatId: {ChatId}", ChatId);
+                Log.Error(ex, "Exception opening tunnel for ChatId: {ChatId}", ChatId);
                 
                 // Intentar limpiar el proceso si se creó
                 if (processLocal != null)
                 {
                     try
                     {
+                        int processId = processLocal.Id;
+                        
                         if (!processLocal.HasExited)
                         {
+                            Log.Warning("Killing process after exception, PID: {ProcessId}", processId);
                             processLocal.Kill();
                             processLocal.WaitForExit(5000);
+                            
+                            // Doble verificación con taskkill
+                            try
+                            {
+                                var remainingProcess = Process.GetProcessById(processId);
+                                if (remainingProcess != null && !remainingProcess.HasExited)
+                                {
+                                    Log.Warning("Process still running, using taskkill for PID: {ProcessId}", processId);
+                                    var killProcess = new Process
+                                    {
+                                        StartInfo = new ProcessStartInfo
+                                        {
+                                            FileName = "taskkill",
+                                            Arguments = $"/F /PID {processId}",
+                                            UseShellExecute = false,
+                                            CreateNoWindow = true
+                                        }
+                                    };
+                                    killProcess.Start();
+                                    killProcess.WaitForExit(3000);
+                                }
+                            }
+                            catch (ArgumentException)
+                            {
+                                // Proceso ya no existe, está bien
+                                Log.Debug("Process {ProcessId} no longer exists", processId);
+                            }
                         }
+                        
                         processLocal.Dispose();
                     }
                     catch (Exception cleanupEx)
@@ -363,6 +469,7 @@ namespace NexChat.Services
                         Log.Warning(cleanupEx, "Error cleaning up failed process");
                     }
                     
+                    // Asegurarse de que NO está en la lista
                     _processList.Remove(ChatId);
                 }
                 
@@ -610,6 +717,38 @@ namespace NexChat.Services
         ~CloudflaredService()
         {
             Dispose(false);
+        }
+
+        /// <summary>
+        /// Fuerza la limpieza de todos los procesos cloudflared (incluso los que no están en nuestra lista)
+        /// </summary>
+        public void ForceCleanupAllProcesses()
+        {
+            Log.Warning("Force cleanup of all cloudflared processes requested");
+            
+            try
+            {
+                // Primero cerrar los que tenemos en nuestra lista
+                var chatIds = _processList.Keys.ToList();
+                foreach (var chatId in chatIds)
+                {
+                    try
+                    {
+                        TryCloseTunnel(chatId).Wait(TimeSpan.FromSeconds(3));
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "Error closing tracked tunnel during force cleanup: {ChatId}", chatId);
+                    }
+                }
+                
+                // Luego buscar y matar cualquier proceso cloudflared que quede
+                CleanupOrphanedProcesses();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Error during force cleanup");
+            }
         }
     }
 }
