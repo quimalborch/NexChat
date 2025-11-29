@@ -65,6 +65,16 @@ namespace NexChat.Services
 
                 return new returnMessageUpdateInfo(true, targetVersion);
             }
+            catch (System.Net.Http.HttpRequestException ex) when (ex.Message.Contains("404"))
+            {
+                Log.Warning("No releases found in repository (404). This is normal if no releases have been published yet.");
+                return new returnMessageUpdateInfo("No releases available");
+            }
+            catch (System.Net.Http.HttpRequestException ex)
+            {
+                Log.Error(ex, "Network error checking for updates: {Message}", ex.Message);
+                return new returnMessageUpdateInfo($"Network error: {ex.Message}");
+            }
             catch (Exception ex)
             {
                 Log.Error(ex, "Error checking for updates. Exception type: {ExceptionType}", ex.GetType().Name);
@@ -124,6 +134,7 @@ namespace NexChat.Services
         public bool updateAvaliable = false;
         public string? version;
         public string? messageError;
+        public bool hasError => !string.IsNullOrEmpty(messageError);
 
         public returnMessageUpdateInfo(bool udpateAvaliable)
         {
@@ -139,6 +150,7 @@ namespace NexChat.Services
         public returnMessageUpdateInfo(string messageError)
         {
             this.messageError = messageError;
+            this.updateAvaliable = false;
         }
     }
 }
