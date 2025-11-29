@@ -11,6 +11,7 @@ using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Serilog;
 
 namespace NexChat.Services
 {
@@ -40,6 +41,8 @@ namespace NexChat.Services
             
             // Crear carpeta si no existe
             Directory.CreateDirectory(_cloudflareFolder);
+            
+            Log.Information("CloudflaredService initialized. Executable path: {Path}", _executablePath);
         }
 
         /// <summary>
@@ -53,7 +56,7 @@ namespace NexChat.Services
                 // Si no existe el ejecutable, necesitamos descargarlo
                 if (!File.Exists(_executablePath))
                 {
-                    Console.WriteLine("Cloudflared executable not found. Download needed.");
+                    Log.Information("Cloudflared executable not found. Download needed");
                     return true;
                 }
 
@@ -61,7 +64,7 @@ namespace NexChat.Services
                 var latestRelease = await GetLatestReleaseInfo();
                 if (latestRelease == null)
                 {
-                    Console.WriteLine("Could not fetch latest release info from GitHub.");
+                    Log.Warning("Could not fetch latest release info from GitHub");
                     return false;
                 }
 
@@ -69,14 +72,14 @@ namespace NexChat.Services
                 var asset = FindTargetAsset(latestRelease);
                 if (asset == null)
                 {
-                    Console.WriteLine($"Could not find {EXECUTABLE_NAME} in latest release.");
+                    Log.Warning("Could not find {ExecutableName} in latest release", EXECUTABLE_NAME);
                     return false;
                 }
 
                 // Calcular hash del archivo local
                 string localHash = CalculateFileHash(_executablePath);
-                Console.WriteLine($"Local file hash: {localHash}");
-                Console.WriteLine($"Remote file name: {asset.Name}");
+                Log.Debug("Local file hash: {Hash}", localHash);
+                Log.Debug("Remote file name: {Name}", asset.Name);
                 
                 // Si GitHub no proporciona hash, comparar por tamaño
                 // El hash real solo se puede verificar descargando el archivo checksums si está disponible
@@ -85,16 +88,16 @@ namespace NexChat.Services
                 
                 if (localFileInfo.Length != asset.Size)
                 {
-                    Console.WriteLine($"File size mismatch. Local: {localFileInfo.Length}, Remote: {asset.Size}");
+                    Log.Information("File size mismatch. Local: {LocalSize}, Remote: {RemoteSize}", localFileInfo.Length, asset.Size);
                     return true;
                 }
 
-                Console.WriteLine("Cloudflared executable is up to date.");
+                Log.Information("Cloudflared executable is up to date");
                 return false;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error checking for updates: {ex.Message}");
+                Log.Error(ex, "Error checking for cloudflared updates");
                 return false;
             }
         }
@@ -107,43 +110,43 @@ namespace NexChat.Services
         {
             try
             {
-                Console.WriteLine("Starting cloudflared download...");
+                Log.Information("Starting cloudflared download...");
 
                 // Obtener información del último release
                 var latestRelease = await GetLatestReleaseInfo();
                 if (latestRelease == null)
                 {
-                    Console.WriteLine("Could not fetch latest release info from GitHub.");
+                    Log.Error("Could not fetch latest release info from GitHub");
                     return false;
                 }
 
-                Console.WriteLine($"Latest release: {latestRelease.TagName}");
+                Log.Information("Latest release: {TagName}", latestRelease.TagName);
 
                 // Buscar el asset correspondiente
                 var asset = FindTargetAsset(latestRelease);
                 if (asset == null)
                 {
-                    Console.WriteLine($"Could not find {EXECUTABLE_NAME} in latest release.");
+                    Log.Error("Could not find {ExecutableName} in latest release", EXECUTABLE_NAME);
                     return false;
                 }
 
-                Console.WriteLine($"Found asset: {asset.Name} ({FormatBytes(asset.Size)})");
-                Console.WriteLine($"Download URL: {asset.BrowserDownloadUrl}");
+                Log.Information("Found asset: {Name} ({Size})", asset.Name, FormatBytes(asset.Size));
+                Log.Debug("Download URL: {Url}", asset.BrowserDownloadUrl);
 
                 // Descargar el archivo
-                Console.WriteLine("Downloading...");
+                Log.Information("Downloading...");
                 byte[] fileBytes = await _httpClient.GetByteArrayAsync(asset.BrowserDownloadUrl);
 
                 // Verificar tamaño
                 if (fileBytes.Length != asset.Size)
                 {
-                    Console.WriteLine($"Warning: Downloaded size ({fileBytes.Length}) doesn't match expected size ({asset.Size})");
+                    Log.Warning("Downloaded size ({Downloaded}) doesn't match expected size ({Expected})", fileBytes.Length, asset.Size);
                 }
 
                 // Guardar temporalmente
                 string tempPath = _executablePath + ".tmp";
                 await File.WriteAllBytesAsync(tempPath, fileBytes);
-                Console.WriteLine($"Downloaded to temporary file: {tempPath}");
+                Log.Debug("Downloaded to temporary file: {TempPath}", tempPath);
 
                 // Si existe el archivo anterior, hacer backup
                 if (File.Exists(_executablePath))
@@ -153,21 +156,21 @@ namespace NexChat.Services
                         File.Delete(backupPath);
                     
                     File.Move(_executablePath, backupPath);
-                    Console.WriteLine("Previous version backed up.");
+                    Log.Information("Previous version backed up");
                 }
 
                 // Mover el archivo temporal al destino final
                 File.Move(tempPath, _executablePath);
                 
-                Console.WriteLine($"✓ Cloudflared downloaded successfully to: {_executablePath}");
-                Console.WriteLine($"✓ File hash: {CalculateFileHash(_executablePath)}");
+                string fileHash = CalculateFileHash(_executablePath);
+                Log.Information("Cloudflared downloaded successfully to: {Path}", _executablePath);
+                Log.Information("File hash: {Hash}", fileHash);
                 
                 return true;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"✗ Error downloading cloudflared: {ex.Message}");
-                Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                Log.Error(ex, "Error downloading cloudflared");
                 return false;
             }
         }
@@ -177,7 +180,9 @@ namespace NexChat.Services
         /// </summary>
         public bool IsExecutablePresent()
         {
-            return File.Exists(_executablePath);
+            bool exists = File.Exists(_executablePath);
+            Log.Debug("Cloudflared executable present: {Exists}", exists);
+            return exists;
         }
 
         /// <summary>
@@ -210,6 +215,8 @@ namespace NexChat.Services
         {
             OpenTunnelConnection openTunnelConnection = new(false);
 
+            Log.Information("Opening tunnel for ChatId: {ChatId} on Port: {Port}", ChatId, Port);
+
             ProcessStartInfo psi = new ProcessStartInfo
             {
                 FileName = _executablePath,
@@ -224,13 +231,19 @@ namespace NexChat.Services
             Processlocal.Start();
             _processList.Add(ChatId, Processlocal);
 
+            Log.Debug("Cloudflared process started with PID: {ProcessId}", Processlocal.Id);
+
             // Timeout para evitar bloqueos
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             string? url = await GetUrlTunnelAsync(Processlocal, cts.Token);
 
             if (string.IsNullOrWhiteSpace(url))
+            {
+                Log.Error("Could not retrieve tunnel URL for ChatId: {ChatId}", ChatId);
                 return new OpenTunnelConnection(false, "Could not retrieve tunnel URL.");
+            }
 
+            Log.Information("Tunnel opened successfully. URL: {TunnelUrl}", url);
 
             openTunnelConnection.Success = true;
             openTunnelConnection.TunnelUrl = url;
@@ -241,6 +254,8 @@ namespace NexChat.Services
         {
             OpenTunnelConnection openTunnelConnection = new(false);
 
+            Log.Information("Closing tunnel for ChatId: {ChatId}", ChatId);
+
             if (_processList.ContainsKey(ChatId))
             {
                 Process processToClose = _processList[ChatId];
@@ -248,12 +263,18 @@ namespace NexChat.Services
                 {
                     processToClose.Kill();
                     processToClose.WaitForExit();
+                    Log.Information("Tunnel process killed for ChatId: {ChatId}", ChatId);
+                }
+                else
+                {
+                    Log.Debug("Tunnel process already exited for ChatId: {ChatId}", ChatId);
                 }
                 _processList.Remove(ChatId);
                 openTunnelConnection = new OpenTunnelConnection(true);
             }
             else
             {
+                Log.Warning("No active tunnel found for ChatId: {ChatId}", ChatId);
                 return new OpenTunnelConnection(false, "No active tunnel found for the given ChatId.");
             }
             return openTunnelConnection;
@@ -278,7 +299,10 @@ namespace NexChat.Services
 
                         var match = Regex.Match(sb.ToString(), @"https://[a-zA-Z0-9\-]+\.trycloudflare\.com");
                         if (match.Success)
+                        {
+                            Log.Debug("Tunnel URL extracted from cloudflared output: {Url}", match.Value);
                             return match.Value;
+                        }
                     }
                     else
                     {
@@ -290,6 +314,12 @@ namespace NexChat.Services
             }
             catch (TaskCanceledException)
             {
+                Log.Warning("Timeout while waiting for tunnel URL");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Error extracting tunnel URL from cloudflared output");
                 return null;
             }
         }
@@ -304,7 +334,7 @@ namespace NexChat.Services
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error fetching release info: {ex.Message}");
+                Log.Error(ex, "Error fetching release info from GitHub");
                 return null;
             }
         }

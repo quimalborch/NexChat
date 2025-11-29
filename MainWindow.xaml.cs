@@ -20,6 +20,7 @@ using System.Threading.Tasks;
 using Velopack;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
+using Serilog;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -39,7 +40,7 @@ namespace NexChat
         private Chat _selectedChat;
         private string _currentUserId;
         private bool _cloudflareNeedsUpdate = false;
-        private UpdateManager _updateManager;
+        private NexChat.Services.UpdateManager _updateManager;
         private returnMessageUpdateInfo _updateManagerResponse;
 
         private bool _isInitialized = false;
@@ -337,6 +338,7 @@ namespace NexChat
         {
             if (!_isInitialized && e.WindowActivationState != WindowActivationState.Deactivated)
             {
+                Log.Information("MainWindow activated - starting initialization");
                 _isInitialized = true;
 
                 // Desuscribirse para que solo se ejecute una vez
@@ -346,9 +348,9 @@ namespace NexChat
             }
         }
 
-        private UpdateManager CreateUpdateManager()
+        private NexChat.Services.UpdateManager CreateUpdateManager()
         {
-            return new UpdateManager();
+            return new NexChat.Services.UpdateManager();
         }
 
         private async Task<returnMessageUpdateInfo> LoadUpdateManagerResponse()
@@ -361,30 +363,71 @@ namespace NexChat
             try
             {
 
+                Log.Information("=== Initializing MainWindow ===");
+
+                Log.Debug("Loading UpdateManager response...");
                 _updateManagerResponse = await LoadUpdateManagerResponse();
+                Log.Debug("UpdateManager response loaded: UpdateAvailable={UpdateAvailable}, Version={Version}, Error={Error}", 
+                    _updateManagerResponse.updateAvaliable, 
+                    _updateManagerResponse.version ?? "null", 
+                    _updateManagerResponse.messageError ?? "null");
 
                 await CheckVersionAsync();
 
+                Log.Information("MainWindow initialization completed successfully");
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                Log.Error(ex, "Fatal error during MainWindow initialization");
                 throw;
             }
         }
 
         private async Task CheckVersionAsync()
         {
-            _updateManagerResponse = await _updateManager.CheckActualizacionDisponible();
+            try
+            {
+                Log.Information("Checking for application updates...");
+                
+                _updateManagerResponse = await _updateManager.CheckActualizacionDisponible();
+                
+                Log.Information("Update check completed: UpdateAvailable={UpdateAvailable}, Version={Version}", 
+                    _updateManagerResponse.updateAvaliable, 
+                    _updateManagerResponse.version ?? "null");
 
-            if (!_updateManagerResponse.updateAvaliable) return;
+                if (_updateManagerResponse.messageError != null)
+                {
+                    Log.Warning("Update check returned error: {Error}", _updateManagerResponse.messageError);
+                }
 
-            ButtonUpdateVersion.Visibility = Visibility.Visible;
-            TextButtonUpdateVersion.Text = $"Descargar actualización ({_updateManagerResponse.version})";
-            ToolTipUpdateVersionBtn.Content = $"Descargar nueva actualización ({_updateManagerResponse.version})";
+                if (!_updateManagerResponse.updateAvaliable) 
+                {
+                    Log.Information("No updates available, hiding update button");
+                    return;
+                }
+
+                Log.Information("Update available! Showing update button in UI");
+                
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    ButtonUpdateVersion.Visibility = Visibility.Visible;
+                    TextButtonUpdateVersion.Text = $"Descargar actualización ({_updateManagerResponse.version})";
+                    ToolTipUpdateVersionBtn.Content = $"Descargar nueva actualización ({_updateManagerResponse.version})";
+                    
+                    Log.Debug("Update button UI updated successfully");
+                });
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Error during version check");
+            }
         }
 
         private async void ButtonUpdateVersion_Click(object sender, RoutedEventArgs e)
         {
+            Log.Information("=== Update button clicked by user ===");
+            Log.Information("Target update version: {Version}", _updateManagerResponse.version);
+            
             ContentDialog confirmUpdateVersionDialog = new ContentDialog
             {
                 Title = $"¿Estás completamente seguro de que deseas actualizar a la versión ({_updateManagerResponse.version})?",
@@ -397,14 +440,46 @@ namespace NexChat
 
             ContentDialogResult result = await confirmUpdateVersionDialog.ShowAsync();
 
-            if (result != ContentDialogResult.Primary) return;
+            if (result != ContentDialogResult.Primary)
+            {
+                Log.Information("User cancelled the update");
+                return;
+            }
 
-            ButtonUpdateVersion.IsEnabled = false;
-            TextButtonUpdateVersion.Text = "Descargando actualización...";
-            await _updateManager.ForceUpdate();
-            ButtonUpdateVersion.IsEnabled = true;
-            TextButtonUpdateVersion.Text = $"Descargar actualización ({_updateManagerResponse.version})";
-            ToolTipUpdateVersionBtn.Content = $"Descargar actualización ({_updateManagerResponse.version})";
+            Log.Information("User confirmed update - starting download and installation");
+
+            try
+            {
+                ButtonUpdateVersion.IsEnabled = false;
+                TextButtonUpdateVersion.Text = "Descargando actualización...";
+                
+                Log.Information("Calling ForceUpdate...");
+                await _updateManager.ForceUpdate();
+                
+                // Este código probablemente nunca se ejecutará porque ForceUpdate reinicia la app
+                Log.Warning("ForceUpdate completed without restarting app - this is unexpected");
+                
+                ButtonUpdateVersion.IsEnabled = true;
+                TextButtonUpdateVersion.Text = $"Descargar actualización ({_updateManagerResponse.version})";
+                ToolTipUpdateVersionBtn.Content = $"Descargar actualización ({_updateManagerResponse.version})";
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Error during update process in UI");
+                
+                ButtonUpdateVersion.IsEnabled = true;
+                TextButtonUpdateVersion.Text = $"Error - Reintentar ({_updateManagerResponse.version})";
+                
+                // Mostrar diálogo de error
+                var errorDialog = new ContentDialog
+                {
+                    Title = "Error al actualizar",
+                    Content = $"No se pudo completar la actualización: {ex.Message}",
+                    CloseButtonText = "Aceptar",
+                    XamlRoot = this.Content.XamlRoot
+                };
+                await errorDialog.ShowAsync();
+            }
         }
 
         private void ChatListView_SelectionChanged(object sender, SelectionChangedEventArgs e)

@@ -18,6 +18,7 @@ using Windows.ApplicationModel;
 using Windows.ApplicationModel.Activation;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
+using Serilog;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -40,13 +41,17 @@ namespace NexChat
         /// </summary>
         public App()
         {
+            // Configurar Serilog ANTES de cualquier otra cosa
+            ConfigureSerilog();
+
             try
             {
                 VelopackApp.Build().Run();
+                Log.Information("Velopack initialized successfully");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Velopack initialization error: {ex.Message}");
+                Log.Error(ex, "Velopack initialization error");
             }
 
 
@@ -55,6 +60,94 @@ namespace NexChat
             
             // Aplicar tema base solo en el primer inicio
             SetInitialTheme();
+
+            Log.Information("NexChat application initialized");
+        }
+
+        /// <summary>
+        /// Configura Serilog con logs por ejecución, rotación de 7 días
+        /// </summary>
+        private void ConfigureSerilog()
+        {
+            try
+            {
+                // Ruta de la carpeta de logs en LocalApplicationData
+                string logFolder = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "NexChat",
+                    "Logs"
+                );
+
+                // Crear la carpeta si no existe
+                Directory.CreateDirectory(logFolder);
+
+                // Nombre del archivo de log con fecha y hora de ejecución
+                string logFileName = $"nexchat_{DateTime.Now:yyyyMMdd_HHmmss}.log";
+                string logFilePath = System.IO.Path.Combine(logFolder, logFileName);
+
+                // Configurar Serilog
+                Log.Logger = new LoggerConfiguration()
+                    .MinimumLevel.Debug()
+                    .WriteTo.File(
+                        logFilePath,
+                        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
+                        rollingInterval: RollingInterval.Infinite, // Un archivo por ejecución
+                        retainedFileCountLimit: null, // Gestionaremos la limpieza manualmente
+                        buffered: false // Escribir inmediatamente
+                    )
+                    .CreateLogger();
+
+                Log.Information("=== NexChat Started ===");
+                Log.Information("Application Version: {Version}", typeof(App).Assembly.GetName().Version);
+                Log.Information("Log file: {LogPath}", logFilePath);
+
+                // Limpiar logs antiguos (más de 7 días)
+                CleanupOldLogs(logFolder, 7);
+            }
+            catch (Exception ex)
+            {
+                // Si falla Serilog, al menos escribir en Debug
+                System.Diagnostics.Debug.WriteLine($"Error configuring Serilog: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Elimina archivos de log más antiguos de X días
+        /// </summary>
+        private void CleanupOldLogs(string logFolder, int daysToKeep)
+        {
+            try
+            {
+                var cutoffDate = DateTime.Now.AddDays(-daysToKeep);
+                var logFiles = Directory.GetFiles(logFolder, "nexchat_*.log");
+
+                int deletedCount = 0;
+                foreach (var logFile in logFiles)
+                {
+                    var fileInfo = new FileInfo(logFile);
+                    if (fileInfo.CreationTime < cutoffDate)
+                    {
+                        try
+                        {
+                            File.Delete(logFile);
+                            deletedCount++;
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Warning(ex, "Could not delete old log file: {LogFile}", logFile);
+                        }
+                    }
+                }
+
+                if (deletedCount > 0)
+                {
+                    Log.Information("Cleaned up {Count} old log file(s)", deletedCount);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Error during log cleanup");
+            }
         }
 
         /// <summary>
@@ -67,7 +160,7 @@ namespace NexChat
                 var configuration = _configurationService.GetOrCreateConfiguration();
                 var selectedTheme = configuration.paletaColoresSeleccionada;
 
-                Console.WriteLine($"Setting initial base theme for: {selectedTheme}");
+                Log.Information("Setting initial base theme for: {Theme}", selectedTheme);
 
                 // Establecer el tema base de la aplicación (Dark/Light/Default)
                 // Esto SOLO se puede hacer antes de crear ventanas
@@ -75,12 +168,12 @@ namespace NexChat
                 {
                     case Configuration.PaletaColoresSeleccionada.Automatico:
                         // No establecer RequestedTheme para usar el tema del sistema
-                        Console.WriteLine("Initial theme: Automatic (System Default)");
+                        Log.Information("Initial theme: Automatic (System Default)");
                         break;
                         
                     case Configuration.PaletaColoresSeleccionada.Claro:
                         this.RequestedTheme = ApplicationTheme.Light;
-                        Console.WriteLine("Initial theme: Light");
+                        Log.Information("Initial theme: Light");
                         break;
                         
                     case Configuration.PaletaColoresSeleccionada.Oscuro:
@@ -89,18 +182,18 @@ namespace NexChat
                     case Configuration.PaletaColoresSeleccionada.Morado:
                         // Todos los temas personalizados usan base Dark
                         this.RequestedTheme = ApplicationTheme.Dark;
-                        Console.WriteLine("Initial theme: Dark (for standard or custom themes)");
+                        Log.Information("Initial theme: Dark (for standard or custom themes)");
                         break;
                         
                     default:
                         this.RequestedTheme = ApplicationTheme.Dark;
-                        Console.WriteLine("Initial theme: Dark (Default fallback)");
+                        Log.Information("Initial theme: Dark (Default fallback)");
                         break;
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error setting initial theme: {ex.Message}");
+                Log.Error(ex, "Error setting initial theme");
                 this.RequestedTheme = ApplicationTheme.Dark; // Fallback seguro
             }
         }
@@ -111,6 +204,8 @@ namespace NexChat
         /// <param name="args">Details about the launch request and process.</param>
         protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
         {
+            Log.Information("Application launched");
+            
             // Aplicar tema personalizado si es necesario (ANTES de crear la ventana)
             ApplyCustomTheme();
             
@@ -118,6 +213,8 @@ namespace NexChat
             _window.Activate();
             
             _isFirstLaunch = false;
+            
+            Log.Information("Main window created and activated");
         }
 
         /// <summary>
@@ -130,14 +227,14 @@ namespace NexChat
                 var configuration = _configurationService.GetOrCreateConfiguration();
                 var selectedTheme = configuration.paletaColoresSeleccionada;
 
-                Console.WriteLine($"Applying custom theme: {selectedTheme}");
+                Log.Information("Applying custom theme: {Theme}", selectedTheme);
 
                 // Remove previous custom theme if exists
                 if (_currentThemeDictionary != null && Resources.MergedDictionaries.Contains(_currentThemeDictionary))
                 {
                     Resources.MergedDictionaries.Remove(_currentThemeDictionary);
                     _currentThemeDictionary = null;
-                    Console.WriteLine("Previous custom theme removed");
+                    Log.Debug("Previous custom theme removed");
                 }
 
                 // Solo cargar ResourceDictionary para temas personalizados
@@ -145,28 +242,27 @@ namespace NexChat
                 {
                     case Configuration.PaletaColoresSeleccionada.Rojo:
                         LoadCustomTheme("ms-appx:///Themes/RedTheme.xaml");
-                        Console.WriteLine("Applied custom theme: Red");
+                        Log.Information("Applied custom theme: Red");
                         break;
                         
                     case Configuration.PaletaColoresSeleccionada.Verde:
                         LoadCustomTheme("ms-appx:///Themes/GreenTheme.xaml");
-                        Console.WriteLine("Applied custom theme: Green");
+                        Log.Information("Applied custom theme: Green");
                         break;
                         
                     case Configuration.PaletaColoresSeleccionada.Morado:
                         LoadCustomTheme("ms-appx:///Themes/PurpleTheme.xaml");
-                        Console.WriteLine("Applied custom theme: Purple");
+                        Log.Information("Applied custom theme: Purple");
                         break;
                         
                     default:
-                        Console.WriteLine("No custom theme to apply");
+                        Log.Debug("No custom theme to apply");
                         break;
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error applying custom theme: {ex.Message}");
-                Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                Log.Error(ex, "Error applying custom theme");
             }
         }
 
@@ -174,7 +270,7 @@ namespace NexChat
         {
             try
             {
-                Console.WriteLine($"Loading custom theme from: {themeUri}");
+                Log.Debug("Loading custom theme from: {ThemeUri}", themeUri);
                 
                 _currentThemeDictionary = new ResourceDictionary
                 {
@@ -183,14 +279,12 @@ namespace NexChat
                 
                 Resources.MergedDictionaries.Add(_currentThemeDictionary);
                 
-                Console.WriteLine($"✓ Custom theme loaded successfully: {themeUri}");
-                Console.WriteLine($"✓ Total merged dictionaries: {Resources.MergedDictionaries.Count}");
+                Log.Information("Custom theme loaded successfully: {ThemeUri}", themeUri);
+                Log.Debug("Total merged dictionaries: {Count}", Resources.MergedDictionaries.Count);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"✗ Error loading custom theme {themeUri}: {ex.Message}");
-                Console.WriteLine($"Exception type: {ex.GetType().Name}");
-                Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                Log.Error(ex, "Error loading custom theme {ThemeUri}", themeUri);
             }
         }
 
@@ -202,7 +296,7 @@ namespace NexChat
         {
             try
             {
-                Console.WriteLine("UpdateTheme called - reloading custom theme");
+                Log.Information("UpdateTheme called - reloading custom theme");
                 
                 var configuration = _configurationService.GetOrCreateConfiguration();
                 var selectedTheme = configuration.paletaColoresSeleccionada;
@@ -228,7 +322,7 @@ namespace NexChat
                     
                     if (needsRestart)
                     {
-                        Console.WriteLine("⚠️ Theme change requires app restart (base theme mismatch)");
+                        Log.Warning("Theme change requires app restart (base theme mismatch)");
                     }
                 }
                 
@@ -239,12 +333,12 @@ namespace NexChat
                 if (_window?.Content is FrameworkElement rootElement)
                 {
                     rootElement.UpdateLayout();
-                    Console.WriteLine("Window content layout updated");
+                    Log.Debug("Window content layout updated");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error updating theme: {ex.Message}");
+                Log.Error(ex, "Error updating theme");
             }
         }
     }
