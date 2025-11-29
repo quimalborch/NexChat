@@ -94,7 +94,7 @@ namespace NexChat.Services
                 }
                 
                 Log.Information("Downloading update: {Version}", updateInfo.TargetFullRelease.Version);
-                Log.Debug("Download URL: {Url}", updateInfo.TargetFullRelease.DownloadUrl);
+                Log.Debug("Notes Markdown: {Url}", updateInfo.TargetFullRelease.NotesMarkdown);
                 Log.Debug("Package size: {Size} bytes", updateInfo.TargetFullRelease.Size);
 #else
                 Log.Warning("Running in DEBUG mode - skipping actual update download");
