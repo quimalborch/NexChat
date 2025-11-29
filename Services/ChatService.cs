@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 
 namespace NexChat.Services
 {
-    public class ChatService
+    public class ChatService : IDisposable
     {
         public List<Chat> chats = new List<Chat>();
         public event EventHandler<List<Chat>> ChatListUpdated;
@@ -21,6 +21,8 @@ namespace NexChat.Services
         
         // WebSocket connections para chats remotos
         private Dictionary<string, ChatWebSocketService> _webSocketConnections = new Dictionary<string, ChatWebSocketService>();
+
+        private bool _disposed = false;
 
         public ChatService(CloudflaredService cloudflaredService, ChatConnectorService chatConnectorService) 
         {
@@ -577,6 +579,59 @@ namespace NexChat.Services
                 return webServer.ConnectedClientsCount;
             }
             return 0;
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (_disposed)
+                return;
+
+            if (disposing)
+            {
+                Console.WriteLine("Disposing ChatService - cleaning up resources");
+                
+                // Cerrar todos los servidores web
+                var chatIds = _webServers.Keys.ToList();
+                foreach (var chatId in chatIds)
+                {
+                    try
+                    {
+                        StopWebServer(chatId).Wait(TimeSpan.FromSeconds(5));
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error stopping web server during dispose: {ex.Message}");
+                    }
+                }
+                
+                // Desconectar todos los WebSockets
+                var wsIds = _webSocketConnections.Keys.ToList();
+                foreach (var chatId in wsIds)
+                {
+                    try
+                    {
+                        DisconnectWebSocketForRemoteChat(chatId).Wait(TimeSpan.FromSeconds(5));
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error disconnecting WebSocket during dispose: {ex.Message}");
+                    }
+                }
+                
+                // Dispose CloudflaredService (esto cerrará todos los túneles)
+                if (_cloudflaredService is IDisposable disposable)
+                {
+                    disposable.Dispose();
+                }
+            }
+
+            _disposed = true;
         }
     }
 }

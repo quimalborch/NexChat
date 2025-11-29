@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
@@ -15,7 +16,7 @@ using Serilog;
 
 namespace NexChat.Services
 {
-    public class CloudflaredService
+    public class CloudflaredService : IDisposable
     {
         private const string GITHUB_API_URL = "https://api.github.com/repos/cloudflare/cloudflared/releases/latest";
         private const string EXECUTABLE_NAME = "cloudflared-windows-386.exe";
@@ -25,6 +26,7 @@ namespace NexChat.Services
         private readonly string _executablePath;
         private readonly HttpClient _httpClient;
         private Dictionary<string, Process> _processList = new Dictionary<string, Process>();
+        private bool _disposed = false;
 
         public CloudflaredService()
         {
@@ -43,6 +45,55 @@ namespace NexChat.Services
             Directory.CreateDirectory(_cloudflareFolder);
             
             Log.Information("CloudflaredService initialized. Executable path: {Path}", _executablePath);
+            
+            // Limpiar procesos huérfanos al iniciar
+            CleanupOrphanedProcesses();
+        }
+
+        /// <summary>
+        /// Limpia procesos cloudflared huérfanos que puedan estar corriendo
+        /// </summary>
+        private void CleanupOrphanedProcesses()
+        {
+            try
+            {
+                Log.Information("Checking for orphaned cloudflared processes...");
+                
+                var cloudflaredProcesses = Process.GetProcessesByName("cloudflared");
+                
+                if (cloudflaredProcesses.Length > 0)
+                {
+                    Log.Warning("Found {Count} orphaned cloudflared process(es). Cleaning up...", cloudflaredProcesses.Length);
+                    
+                    foreach (var process in cloudflaredProcesses)
+                    {
+                        try
+                        {
+                            if (!process.HasExited)
+                            {
+                                Log.Information("Killing orphaned process PID: {ProcessId}", process.Id);
+                                process.Kill();
+                                process.WaitForExit(5000); // Esperar máximo 5 segundos
+                            }
+                            process.Dispose();
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Warning(ex, "Could not kill orphaned process PID: {ProcessId}", process.Id);
+                        }
+                    }
+                    
+                    Log.Information("Orphaned process cleanup completed");
+                }
+                else
+                {
+                    Log.Information("No orphaned cloudflared processes found");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Error during orphaned process cleanup");
+            }
         }
 
         /// <summary>
@@ -213,9 +264,21 @@ namespace NexChat.Services
 
         public async Task<OpenTunnelConnection> TryOpenTunnel(string ChatId, int Port)
         {
-            OpenTunnelConnection openTunnelConnection = new(false);
-
             Log.Information("Opening tunnel for ChatId: {ChatId} on Port: {Port}", ChatId, Port);
+
+            // Verificar que el ejecutable existe
+            if (!File.Exists(_executablePath))
+            {
+                Log.Error("Cloudflared executable not found at: {Path}", _executablePath);
+                return new OpenTunnelConnection(false, "Cloudflared no está instalado. Por favor, descárgalo primero.");
+            }
+
+            // Cerrar túnel existente si hay uno
+            if (_processList.ContainsKey(ChatId))
+            {
+                Log.Warning("Tunnel already exists for ChatId: {ChatId}. Closing existing tunnel first...", ChatId);
+                await TryCloseTunnel(ChatId);
+            }
 
             ProcessStartInfo psi = new ProcessStartInfo
             {
@@ -227,57 +290,154 @@ namespace NexChat.Services
                 CreateNoWindow = true
             };
 
-            Process Processlocal = new Process { StartInfo = psi };
-            Processlocal.Start();
-            _processList.Add(ChatId, Processlocal);
+            Process? processLocal = null;
 
-            Log.Debug("Cloudflared process started with PID: {ProcessId}", Processlocal.Id);
-
-            // Timeout para evitar bloqueos
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            string? url = await GetUrlTunnelAsync(Processlocal, cts.Token);
-
-            if (string.IsNullOrWhiteSpace(url))
+            try
             {
-                Log.Error("Could not retrieve tunnel URL for ChatId: {ChatId}", ChatId);
-                return new OpenTunnelConnection(false, "Could not retrieve tunnel URL.");
+                processLocal = new Process { StartInfo = psi };
+                processLocal.EnableRaisingEvents = true;
+                
+                // Manejar salida inesperada del proceso
+                processLocal.Exited += (sender, e) =>
+                {
+                    var proc = sender as Process;
+                    if (proc != null)
+                    {
+                        Log.Warning("Cloudflared process exited unexpectedly. PID: {ProcessId}, ExitCode: {ExitCode}", 
+                            proc.Id, proc.ExitCode);
+                        
+                        // Remover de la lista si sale inesperadamente
+                        if (_processList.ContainsValue(proc))
+                        {
+                            var key = _processList.FirstOrDefault(x => x.Value == proc).Key;
+                            if (key != null)
+                            {
+                                _processList.Remove(key);
+                                Log.Information("Removed exited process from tracking: {ChatId}", key);
+                            }
+                        }
+                    }
+                };
+                
+                processLocal.Start();
+                _processList.Add(ChatId, processLocal);
+
+                Log.Debug("Cloudflared process started with PID: {ProcessId}", processLocal.Id);
+
+                // Timeout más largo para dar tiempo a cloudflared a conectar (30 segundos)
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                string? url = await GetUrlTunnelAsync(processLocal, cts.Token);
+
+                if (string.IsNullOrWhiteSpace(url))
+                {
+                    Log.Error("Could not retrieve tunnel URL for ChatId: {ChatId}", ChatId);
+                    
+                    // Limpiar proceso fallido
+                    await TryCloseTunnel(ChatId);
+                    
+                    return new OpenTunnelConnection(false, "No se pudo establecer la conexión con Cloudflare. El servicio puede estar caído o el túnel no se pudo crear.");
+                }
+
+                Log.Information("Tunnel opened successfully. URL: {TunnelUrl}", url);
+
+                return new OpenTunnelConnection(true) { TunnelUrl = url };
             }
-
-            Log.Information("Tunnel opened successfully. URL: {TunnelUrl}", url);
-
-            openTunnelConnection.Success = true;
-            openTunnelConnection.TunnelUrl = url;
-            return openTunnelConnection;
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Error opening tunnel for ChatId: {ChatId}", ChatId);
+                
+                // Intentar limpiar el proceso si se creó
+                if (processLocal != null)
+                {
+                    try
+                    {
+                        if (!processLocal.HasExited)
+                        {
+                            processLocal.Kill();
+                            processLocal.WaitForExit(5000);
+                        }
+                        processLocal.Dispose();
+                    }
+                    catch (Exception cleanupEx)
+                    {
+                        Log.Warning(cleanupEx, "Error cleaning up failed process");
+                    }
+                    
+                    _processList.Remove(ChatId);
+                }
+                
+                return new OpenTunnelConnection(false, $"Error al iniciar el túnel: {ex.Message}");
+            }
         }
 
         public async Task<OpenTunnelConnection> TryCloseTunnel(string ChatId)
         {
-            OpenTunnelConnection openTunnelConnection = new(false);
-
             Log.Information("Closing tunnel for ChatId: {ChatId}", ChatId);
 
             if (_processList.ContainsKey(ChatId))
             {
                 Process processToClose = _processList[ChatId];
-                if (!processToClose.HasExited)
+                
+                try
                 {
-                    processToClose.Kill();
-                    processToClose.WaitForExit();
-                    Log.Information("Tunnel process killed for ChatId: {ChatId}", ChatId);
+                    if (!processToClose.HasExited)
+                    {
+                        Log.Information("Killing tunnel process PID: {ProcessId} for ChatId: {ChatId}", 
+                            processToClose.Id, ChatId);
+                        
+                        processToClose.Kill();
+                        
+                        // Esperar a que el proceso termine (máximo 5 segundos)
+                        bool exited = processToClose.WaitForExit(5000);
+                        
+                        if (!exited)
+                        {
+                            Log.Warning("Process did not exit gracefully, forcing termination");
+                            // Intentar forzar cierre de nuevo
+                            try
+                            {
+                                processToClose.Kill();
+                                processToClose.WaitForExit(2000);
+                            }
+                            catch (Exception ex)
+                            {
+                                Log.Warning(ex, "Could not force kill process");
+                            }
+                        }
+                        
+                        Log.Information("Tunnel process terminated for ChatId: {ChatId}", ChatId);
+                    }
+                    else
+                    {
+                        Log.Debug("Tunnel process already exited for ChatId: {ChatId}", ChatId);
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    Log.Debug("Tunnel process already exited for ChatId: {ChatId}", ChatId);
+                    Log.Error(ex, "Error killing tunnel process for ChatId: {ChatId}", ChatId);
                 }
-                _processList.Remove(ChatId);
-                openTunnelConnection = new OpenTunnelConnection(true);
+                finally
+                {
+                    // Siempre limpiar el proceso y removerlo de la lista
+                    try
+                    {
+                        processToClose.Dispose();
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warning(ex, "Error disposing process");
+                    }
+                    
+                    _processList.Remove(ChatId);
+                }
+                
+                return new OpenTunnelConnection(true);
             }
             else
             {
                 Log.Warning("No active tunnel found for ChatId: {ChatId}", ChatId);
-                return new OpenTunnelConnection(false, "No active tunnel found for the given ChatId.");
+                return new OpenTunnelConnection(false, "No hay un túnel activo para este chat.");
             }
-            return openTunnelConnection;
         }
 
         private async Task<string?> GetUrlTunnelAsync(Process proc, CancellationToken token)
@@ -288,14 +448,18 @@ namespace NexChat.Services
                 var buffer = new byte[2048];
                 var sb = new StringBuilder();
 
-                while (!token.IsCancellationRequested)
+                while (!token.IsCancellationRequested && !proc.HasExited)
                 {
+                    // Usar token con timeout para ReadAsync
                     int read = await stream.ReadAsync(buffer, 0, buffer.Length, token);
 
                     if (read > 0)
                     {
                         string chunk = Encoding.UTF8.GetString(buffer, 0, read);
                         sb.Append(chunk);
+                        
+                        // Log de output para debugging
+                        Log.Debug("Cloudflared output: {Output}", chunk.Trim());
 
                         var match = Regex.Match(sb.ToString(), @"https://[a-zA-Z0-9\-]+\.trycloudflare\.com");
                         if (match.Success)
@@ -306,15 +470,22 @@ namespace NexChat.Services
                     }
                     else
                     {
-                        await Task.Delay(50, token);
+                        // No hay datos disponibles, esperar un poco
+                        await Task.Delay(100, token);
                     }
+                }
+                
+                // Si el proceso terminó antes de obtener la URL
+                if (proc.HasExited)
+                {
+                    Log.Error("Cloudflared process exited before providing tunnel URL. Exit code: {ExitCode}", proc.ExitCode);
                 }
 
                 return null;
             }
             catch (TaskCanceledException)
             {
-                Log.Warning("Timeout while waiting for tunnel URL");
+                Log.Warning("Timeout while waiting for tunnel URL (30 seconds)");
                 return null;
             }
             catch (Exception ex)
@@ -399,6 +570,46 @@ namespace NexChat.Services
 
             [JsonPropertyName("browser_download_url")]
             public string BrowserDownloadUrl { get; set; } = string.Empty;
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (_disposed)
+                return;
+
+            if (disposing)
+            {
+                Log.Information("Disposing CloudflaredService - closing all tunnels");
+                
+                // Cerrar todos los túneles activos
+                var chatIds = _processList.Keys.ToList();
+                foreach (var chatId in chatIds)
+                {
+                    try
+                    {
+                        TryCloseTunnel(chatId).Wait(TimeSpan.FromSeconds(5));
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "Error closing tunnel during dispose: {ChatId}", chatId);
+                    }
+                }
+                
+                _httpClient?.Dispose();
+            }
+
+            _disposed = true;
+        }
+
+        ~CloudflaredService()
+        {
+            Dispose(false);
         }
     }
 }

@@ -67,6 +67,68 @@ namespace NexChat
             _ = CheckCloudflareStatus();
 
             this.Activated += MainWindow_Activated;
+            
+            // Suscribirse al evento de cierre de ventana
+            this.Closed += MainWindow_Closed;
+        }
+
+        private void MainWindow_Closed(object sender, WindowEventArgs args)
+        {
+            try
+            {
+                Log.Information("MainWindow closing - cleaning up resources");
+                
+                // Limpiar ChatService (esto a su vez limpiará CloudflaredService)
+                if (_chatService is IDisposable disposableChat)
+                {
+                    disposableChat.Dispose();
+                }
+                
+                // Cleanup extra de procesos cloudflared por si acaso
+                CleanupCloudflaredProcesses();
+                
+                Log.Information("MainWindow cleanup completed");
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Error during MainWindow cleanup");
+            }
+        }
+
+        private void CleanupCloudflaredProcesses()
+        {
+            try
+            {
+                var cloudflaredProcesses = System.Diagnostics.Process.GetProcessesByName("cloudflared");
+                
+                if (cloudflaredProcesses.Length > 0)
+                {
+                    Log.Warning("Found {Count} cloudflared process(es) during window close. Cleaning up...", 
+                        cloudflaredProcesses.Length);
+                    
+                    foreach (var process in cloudflaredProcesses)
+                    {
+                        try
+                        {
+                            if (!process.HasExited)
+                            {
+                                Log.Information("Killing cloudflared process PID: {ProcessId}", process.Id);
+                                process.Kill();
+                                process.WaitForExit(5000);
+                            }
+                            process.Dispose();
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Warning(ex, "Could not kill cloudflared process during cleanup");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Error cleaning up cloudflared processes");
+            }
         }
 
         private async System.Threading.Tasks.Task CheckCloudflareStatus()

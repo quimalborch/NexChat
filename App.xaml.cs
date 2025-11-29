@@ -206,6 +206,9 @@ namespace NexChat
         {
             Log.Information("Application launched");
             
+            // Suscribirse a excepciones no manejadas para cleanup
+            this.UnhandledException += App_UnhandledException;
+            
             // Aplicar tema personalizado si es necesario (ANTES de crear la ventana)
             ApplyCustomTheme();
             
@@ -215,6 +218,57 @@ namespace NexChat
             _isFirstLaunch = false;
             
             Log.Information("Main window created and activated");
+        }
+
+        private void App_UnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
+        {
+            Log.Error(e.Exception, "Unhandled exception in application");
+            
+            // Intentar cleanup antes de que la app muera
+            CleanupCloudflaredProcesses();
+            
+            // Marcar como manejado para evitar crash inmediato y permitir logging
+            e.Handled = true;
+        }
+
+        private void CleanupCloudflaredProcesses()
+        {
+            try
+            {
+                Log.Information("Cleaning up cloudflared processes");
+                
+                var cloudflaredProcesses = System.Diagnostics.Process.GetProcessesByName("cloudflared");
+                
+                if (cloudflaredProcesses.Length > 0)
+                {
+                    Log.Warning("Found {Count} cloudflared process(es). Cleaning up...", 
+                        cloudflaredProcesses.Length);
+                    
+                    foreach (var process in cloudflaredProcesses)
+                    {
+                        try
+                        {
+                            if (!process.HasExited)
+                            {
+                                Log.Information("Killing cloudflared process PID: {ProcessId}", process.Id);
+                                process.Kill();
+                                process.WaitForExit(5000);
+                            }
+                            process.Dispose();
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Warning(ex, "Could not kill cloudflared process");
+                        }
+                    }
+                }
+                
+                Log.Information("Cloudflared process cleanup completed");
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Error during cloudflared cleanup");
+            }
         }
 
         /// <summary>
