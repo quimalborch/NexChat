@@ -135,6 +135,7 @@ namespace NexChat.Services
 
             chatRemoto.IsInvited = true;
             chatRemoto.CodeInvitation = Name;
+            chatRemoto.ConnectionStatus = ConnectionStatus.Unknown; // Estado inicial
             
             // Copiar mensajes iniciales del chat recuperado
             foreach (var msg in chatRecuperado.Messages)
@@ -147,7 +148,9 @@ namespace NexChat.Services
             SaveChats();
             
             // Conectar WebSocket para recibir actualizaciones en tiempo real
-            await ConnectWebSocketForRemoteChat(chatRemoto.Id);
+            bool connected = await ConnectWebSocketForRemoteChat(chatRemoto.Id);
+            
+            // El estado de conexión se actualizará automáticamente en ConnectWebSocketForRemoteChat
 
             return true;
         }
@@ -178,6 +181,16 @@ namespace NexChat.Services
                 wsService.ConnectionStatusChanged += (sender, status) =>
                 {
                     Console.WriteLine($"🔌 WebSocket status for chat '{chat.Name}': {status}");
+                    
+                    // Actualizar estado de conexión del chat
+                    if (status == "Connected")
+                    {
+                        chat.ConnectionStatus = ConnectionStatus.Connected;
+                    }
+                    else if (status == "Disconnected" || status == "Error")
+                    {
+                        chat.ConnectionStatus = ConnectionStatus.Disconnected;
+                    }
                 };
 
                 // Conectar
@@ -187,17 +200,20 @@ namespace NexChat.Services
                 if (connected)
                 {
                     _webSocketConnections[chatId] = wsService;
+                    chat.ConnectionStatus = ConnectionStatus.Connected;
                     Console.WriteLine($"✓ WebSocket connected for remote chat '{chat.Name}'");
                     return true;
                 }
                 else
                 {
+                    chat.ConnectionStatus = ConnectionStatus.Disconnected;
                     Console.WriteLine($"❌ Failed to connect WebSocket for chat '{chat.Name}'");
                     return false;
                 }
             }
             catch (Exception ex)
             {
+                chat.ConnectionStatus = ConnectionStatus.Disconnected;
                 Console.WriteLine($"❌ Error connecting WebSocket for chat {chatId}: {ex.Message}");
                 return false;
             }
@@ -212,6 +228,14 @@ namespace NexChat.Services
             {
                 await wsService.DisconnectAsync();
                 _webSocketConnections.Remove(chatId);
+                
+                // Actualizar estado del chat
+                var chat = GetChatById(chatId);
+                if (chat != null)
+                {
+                    chat.ConnectionStatus = ConnectionStatus.Disconnected;
+                }
+                
                 Console.WriteLine($"🔌 WebSocket disconnected for chat {chatId}");
             }
         }
@@ -352,29 +376,76 @@ namespace NexChat.Services
             // Si es un chat remoto, enviar mensaje por WebSocket
             if (chat.IsInvited && _webSocketConnections.TryGetValue(chatId, out var wsService))
             {
-                bool sent = await wsService.SendMessageAsync(message);
-                if (sent)
+                try
                 {
-                    Console.WriteLine($"✓ Message sent to remote chat via WebSocket");
-                    // El mensaje se agregará cuando el servidor lo confirme y lo broadcast de vuelta
+                    bool sent = await wsService.SendMessageAsync(message);
+                    if (sent)
+                    {
+                        chat.ConnectionStatus = ConnectionStatus.Connected;
+                        Console.WriteLine($"✓ Message sent to remote chat via WebSocket");
+                        // El mensaje se agregará cuando el servidor lo confirme y lo broadcast de vuelta
+                    }
+                    else
+                    {
+                        Console.WriteLine($"❌ Failed to send message via WebSocket, falling back to HTTP");
+                        
+                        // Fallback a HTTP POST si WebSocket falla
+                        bool httpSent = await _chatConnectorService.SendMessage(chat.CodeInvitation!, message);
+                        
+                        if (httpSent)
+                        {
+                            chat.ConnectionStatus = ConnectionStatus.Connected;
+                            // Con HTTP no hay broadcast automático, así que agregamos el mensaje manualmente
+                            message.Chat = chat;
+                            if (!chat.Messages.Any(m => m.Id == message.Id))
+                            {
+                                chat.Messages.Add(message);
+                                SaveChats();
+                                Console.WriteLine($"✓ Message added locally after HTTP fallback");
+                            }
+                        }
+                        else
+                        {
+                            // Ambos métodos fallaron
+                            chat.ConnectionStatus = ConnectionStatus.Disconnected;
+                            throw new Exception("No se pudo enviar el mensaje. El servidor no responde.");
+                        }
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    Console.WriteLine($"❌ Failed to send message via WebSocket, falling back to HTTP");
-                    // Fallback a HTTP POST si WebSocket falla
+                    chat.ConnectionStatus = ConnectionStatus.Disconnected;
+                    Console.WriteLine($"❌ Error sending message: {ex.Message}");
+                    throw; // Re-throw para que MainWindow lo maneje
+                }
+            }
+            else if (chat.IsInvited && !_webSocketConnections.ContainsKey(chatId))
+            {
+                // No hay WebSocket, intentar HTTP directamente
+                try
+                {
                     bool httpSent = await _chatConnectorService.SendMessage(chat.CodeInvitation!, message);
                     
                     if (httpSent)
                     {
-                        // Con HTTP no hay broadcast automático, así que agregamos el mensaje manualmente
+                        chat.ConnectionStatus = ConnectionStatus.Connected;
                         message.Chat = chat;
                         if (!chat.Messages.Any(m => m.Id == message.Id))
                         {
                             chat.Messages.Add(message);
                             SaveChats();
-                            Console.WriteLine($"✓ Message added locally after HTTP fallback");
                         }
                     }
+                    else
+                    {
+                        chat.ConnectionStatus = ConnectionStatus.Disconnected;
+                        throw new Exception("No se pudo enviar el mensaje. El servidor no responde.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    chat.ConnectionStatus = ConnectionStatus.Disconnected;
+                    throw;
                 }
             }
             else

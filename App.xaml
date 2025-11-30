@@ -3,13 +3,18 @@
     x:Class="NexChat.App"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:local="using:NexChat">
+    xmlns:local="using:NexChat"
+    xmlns:converters="using:NexChat.Converters">
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
                 <!-- Theme dictionaries will be loaded dynamically -->
             </ResourceDictionary.MergedDictionaries>
+            
+            <!-- Converters -->
+            <converters:ChatStatusToBackgroundConverter x:Key="ChatStatusToBackgroundConverter"/>
+            <converters:ChatStatusToBorderBrushConverter x:Key="ChatStatusToBorderBrushConverter"/>
             
             <!-- Estilo personalizado para botones de navegación -->
             <Style x:Key="NavigationButtonStyle" TargetType="Button">

@@ -320,7 +320,7 @@ namespace NexChat
                             if (newMessagesAdded && wasAtBottom)
                             {
                                 Console.WriteLine($"   📜 Auto-scrolling to bottom (user was at bottom)");
-                                // Usar un pequeño delay para que el layout se actualice
+                                // Usar un pequeño delay para que el layout se atualice
                                 _ = ScrollToBottomWithDelay();
                             }
                             else if (newMessagesAdded && !wasAtBottom)
@@ -544,15 +544,122 @@ namespace NexChat
             }
         }
 
-        private void ChatListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private async void ChatListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             var listView = sender as ListView;
             var selectedChat = listView?.SelectedItem as Chat;
             if (selectedChat != null)
             {
                 _selectedChat = selectedChat;
-                LoadChatView(selectedChat);
+                
+                // Si es un chat invitado, verificar conexión antes de cargar
+                if (selectedChat.IsInvited)
+                {
+                    await VerifyAndLoadRemoteChat(selectedChat);
+                }
+                else
+                {
+                    LoadChatView(selectedChat);
+                }
             }
+        }
+
+        /// <summary>
+        /// Verifica la conexión con un chat remoto y lo carga si está disponible
+        /// </summary>
+        private async Task VerifyAndLoadRemoteChat(Chat chat)
+        {
+            if (string.IsNullOrEmpty(chat.CodeInvitation))
+            {
+                chat.ConnectionStatus = ConnectionStatus.Disconnected;
+                
+                // FORZAR actualización de la UI
+                RefreshChatInUI(chat);
+                
+                // Pequeño delay para asegurar que la UI se actualice visualmente
+                await Task.Delay(100);
+                
+                await ShowConnectionErrorDialog(chat.Name, "Código de invitación no válido");
+                return;
+            }
+
+            try
+            {
+                // Establecer estado como verificando
+                chat.ConnectionStatus = ConnectionStatus.Unknown;
+                RefreshChatInUI(chat);
+                
+                // Intentar obtener el chat del servidor remoto
+                var remoteChat = await _chatConnectorService.GetChat(chat.CodeInvitation);
+                
+                if (remoteChat == null)
+                {
+                    // IMPORTANTE: Establecer estado ROJO inmediatamente
+                    chat.ConnectionStatus = ConnectionStatus.Disconnected;
+                    
+                    // FORZAR actualización de la UI
+                    RefreshChatInUI(chat);
+                    
+                    // Forzar actualización de UI con un pequeño delay
+                    await Task.Delay(100);
+                    
+                    // Mostrar diálogo de error
+                    await ShowConnectionErrorDialog(chat.Name, "No se pudo conectar con el servidor remoto");
+                    return;
+                }
+                
+                // Conexión exitosa
+                chat.ConnectionStatus = ConnectionStatus.Connected;
+                RefreshChatInUI(chat);
+                LoadChatView(chat);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Error verifying connection to remote chat: {ChatName}", chat.Name);
+                
+                // IMPORTANTE: Establecer estado ROJO inmediatamente
+                chat.ConnectionStatus = ConnectionStatus.Disconnected;
+                
+                // FORZAR actualización de la UI
+                RefreshChatInUI(chat);
+                
+                // Forzar actualización de UI con un pequeño delay
+                await Task.Delay(100);
+                
+                await ShowConnectionErrorDialog(chat.Name, $"Error de conexión: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Fuerza la actualización de un chat específico en la UI
+        /// </summary>
+        private void RefreshChatInUI(Chat chat)
+        {
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                var index = ChatItems.IndexOf(chat);
+                if (index >= 0)
+                {
+                    // Remover y volver a agregar para forzar actualización visual
+                    ChatItems.RemoveAt(index);
+                    ChatItems.Insert(index, chat);
+                }
+            });
+        }
+
+        /// <summary>
+        /// Muestra un diálogo de error de conexión
+        /// </summary>
+        private async Task ShowConnectionErrorDialog(string chatName, string errorMessage)
+        {
+            var dialog = new ContentDialog
+            {
+                Title = $"No se puede conectar con '{chatName}'",
+                Content = errorMessage,
+                CloseButtonText = "Aceptar",
+                XamlRoot = this.Content.XamlRoot
+            };
+            await dialog.ShowAsync();
         }
 
         private void LoadChatView(Chat chat)
@@ -606,18 +713,33 @@ namespace NexChat
             _chatConnectorService.GetChat(ConnectionCode).ContinueWith(chatTask =>
             {
                 var chat = chatTask.Result;
-                if (chat == null) return;
+                
                 DispatcherQueue.TryEnqueue(() =>
                 {
+                    if (chat == null)
+                    {
+                        // Error al cargar mensajes
+                        if (_selectedChat != null)
+                        {
+                            _selectedChat.ConnectionStatus = ConnectionStatus.Disconnected;
+                            RefreshChatInUI(_selectedChat);
+                        }
+                        
+                        _ = ShowConnectionErrorDialog(_selectedChat?.Name ?? "Chat", "No se pudieron cargar los mensajes");
+                        return;
+                    }
+                    
+                    // Mensajes cargados correctamente
+                    if (_selectedChat != null)
+                    {
+                        _selectedChat.ConnectionStatus = ConnectionStatus.Connected;
+                        RefreshChatInUI(_selectedChat);
+                    }
+                    
                     LoadMessages(chat.Messages);
                     ScrollToBottom();
                 });
             });
-
-            //foreach (var message in messages)
-            //{
-            //    AddMessageToUI(message);
-            //}
         }
 
         private void LoadMessages(List<Message> messages)
@@ -824,6 +946,9 @@ namespace NexChat
         {
             if (_selectedChat.CodeInvitation is null)
             {
+                _selectedChat.ConnectionStatus = ConnectionStatus.Disconnected;
+                RefreshChatInUI(_selectedChat);
+                
                 var dialog = new ContentDialog
                 {
                     Title = "Error al enviar mensaje",
@@ -836,13 +961,36 @@ namespace NexChat
                 return;
             }
 
-            // Usar AddMessage del ChatService que maneja WebSocket automáticamente
-            await _chatService.AddMessage(_selectedChat.Id, message);
+            try
+            {
+                // Usar AddMessage del ChatService que maneja WebSocket automáticamente
+                await _chatService.AddMessage(_selectedChat.Id, message);
 
-            // Limpiar input después de enviar
-            messageInputBox.Text = string.Empty;
+                // Si llegamos aquí, el mensaje se envió correctamente
+                _selectedChat.ConnectionStatus = ConnectionStatus.Connected;
+                RefreshChatInUI(_selectedChat);
 
-            Console.WriteLine($"✓ Message sent to ChatService, waiting for server confirmation");
+                // Limpiar input después de enviar
+                messageInputBox.Text = string.Empty;
+
+                Console.WriteLine($"✓ Message sent to ChatService, waiting for server confirmation");
+            }
+            catch (Exception ex)
+            {
+                // Error al enviar mensaje
+                Log.Error(ex, "Error sending message to remote chat: {ChatName}", _selectedChat.Name);
+                _selectedChat.ConnectionStatus = ConnectionStatus.Disconnected;
+                RefreshChatInUI(_selectedChat);
+                
+                var errorDialog = new ContentDialog
+                {
+                    Title = $"No se puede enviar mensaje a '{_selectedChat.Name}'",
+                    Content = $"Error de conexión: {ex.Message}\n\nEl servidor no responde.",
+                    CloseButtonText = "Aceptar",
+                    XamlRoot = this.Content.XamlRoot
+                };
+                await errorDialog.ShowAsync();
+            }
         }
 
         private void SendMessage(TextBox messageInputBox, Message message)
@@ -1154,7 +1302,7 @@ namespace NexChat
                 editMenuItem.IsEnabled = !isStarting;
             }
             
-            // Deshabilitar Eliminar si está iniciándose
+            // Deshabilitar Eliminar si está iniciando
             if (deleteMenuItem != null)
             {
                 deleteMenuItem.IsEnabled = !isStarting;

@@ -14,6 +14,7 @@ namespace NexChat.Data
         private bool _isStarting;
         private bool _isRunning;
         private string? _codeInvitation;
+        private ConnectionStatus _connectionStatus = ConnectionStatus.Unknown;
 
         public string Id { get; set; } = Guid.NewGuid().ToString();
         public string Name { get; set; }
@@ -64,6 +65,23 @@ namespace NexChat.Data
             }
         }
 
+        /// <summary>
+        /// Estado de conexión del chat (solo relevante para chats invitados)
+        /// </summary>
+        [JsonIgnore]
+        public ConnectionStatus ConnectionStatus 
+        { 
+            get => _connectionStatus;
+            set
+            {
+                if (_connectionStatus != value)
+                {
+                    _connectionStatus = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
         public Chat() 
         {
             Messages = new List<Message>();
@@ -81,5 +99,15 @@ namespace NexChat.Data
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
+    }
+
+    /// <summary>
+    /// Estado de conexión de un chat invitado
+    /// </summary>
+    public enum ConnectionStatus
+    {
+        Unknown,      // Estado inicial o no verificado
+        Connected,    // Conectado correctamente
+        Disconnected  // No se puede conectar
     }
 }
