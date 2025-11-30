@@ -998,21 +998,62 @@ namespace NexChat
             var menuItem = sender as MenuFlyoutItem;
             if (menuItem?.Tag is string chatId)
             {
-                // Por defecto, no habilitar túnel. Puedes cambiarlo a true si deseas
-                // habilitar túnel automáticamente cuando se inicia el servidor
-                bool enableTunnel = true;
-                bool success = await _chatService.StartWebServer(chatId, enableTunnel);
+                Log.Information("Starting chat server for ChatId: {ChatId}", chatId);
                 
-                if (!success)
+                // Buscar el chat en la lista
+                var chat = ChatItems.FirstOrDefault(c => c.Id == chatId);
+                if (chat == null)
                 {
+                    Log.Warning("Chat not found in ChatItems: {ChatId}", chatId);
+                    return;
+                }
+                
+                // Establecer el estado de loading (se actualiza automáticamente en la UI por INotifyPropertyChanged)
+                chat.IsStarting = true;
+                Log.Debug("Loading state set for chat: {ChatName}", chat.Name);
+                
+                try
+                {
+                    // Por defecto, habilitar túnel automáticamente cuando se inicia el servidor
+                    bool enableTunnel = true;
+                    bool success = await _chatService.StartWebServer(chatId, enableTunnel);
+                    
+                    if (!success)
+                    {
+                        Log.Error("Failed to start web server for ChatId: {ChatId}", chatId);
+                        
+                        var errorDialog = new ContentDialog
+                        {
+                            Title = "Error",
+                            Content = "No se pudo iniciar la conexión privada con Cloudflare.",
+                            CloseButtonText = "Aceptar",
+                            XamlRoot = this.Content.XamlRoot
+                        };
+                        await errorDialog.ShowAsync();
+                    }
+                    else
+                    {
+                        Log.Information("Web server started successfully for ChatId: {ChatId}", chatId);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "Exception while starting chat server for ChatId: {ChatId}", chatId);
+                    
                     var errorDialog = new ContentDialog
                     {
                         Title = "Error",
-                        Content = "No se pudo iniciar la conexión privada con Cloudflare.",
+                        Content = $"Error al iniciar el servidor: {ex.Message}",
                         CloseButtonText = "Aceptar",
                         XamlRoot = this.Content.XamlRoot
                     };
                     await errorDialog.ShowAsync();
+                }
+                finally
+                {
+                    // Quitar el estado de loading (se actualiza automáticamente en la UI)
+                    chat.IsStarting = false;
+                    Log.Debug("Loading state cleared for chat: {ChatName}", chat.Name);
                 }
             }
         }

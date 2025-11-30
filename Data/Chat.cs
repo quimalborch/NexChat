@@ -1,23 +1,68 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace NexChat.Data
 {
-    public class Chat
+    public class Chat : INotifyPropertyChanged
     {
+        private bool _isStarting;
+        private bool _isRunning;
+        private string? _codeInvitation;
+
         public string Id { get; set; } = Guid.NewGuid().ToString();
         public string Name { get; set; }
-        public string? CodeInvitation { get; set; }
+        
+        public string? CodeInvitation 
+        { 
+            get => _codeInvitation;
+            set
+            {
+                if (_codeInvitation != value)
+                {
+                    _codeInvitation = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+        
         public List<Message> Messages { get; set; }
         public bool IsInvited { get; set; } = true;
-        public bool IsRunning { get; set; } = false;
+        
+        public bool IsRunning 
+        { 
+            get => _isRunning;
+            set
+            {
+                if (_isRunning != value)
+                {
+                    _isRunning = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
         
         [JsonIgnore]
         public int? ServerPort { get; set; }
+        
+        [JsonIgnore]
+        public bool IsStarting 
+        { 
+            get => _isStarting;
+            set
+            {
+                if (_isStarting != value)
+                {
+                    _isStarting = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
 
         public Chat() 
         {
@@ -28,6 +73,13 @@ namespace NexChat.Data
         {
             this.Name = Name;
             Messages = new List<Message>();
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
     }
 }
