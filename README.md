@@ -1,4 +1,4 @@
-# ?? NexChat
+﻿# 💬 NexChat
 
 <div align="center">
 
@@ -8,42 +8,42 @@
 [![.NET 8](https://img.shields.io/badge/.NET-8.0-512BD4)](https://dotnet.microsoft.com/)
 [![Windows](https://img.shields.io/badge/Platform-Windows-0078D6)](https://www.microsoft.com/windows)
 
-[Features](#-features) � [Getting Started](#-getting-started) � [How It Works](#-how-it-works) � [Technologies](#-technologies) � [Security](#-security)
+[Features](#-features) • [Getting Started](#-getting-started) • [How It Works](#-how-it-works) • [Technologies](#-technologies) • [Security](#-security)
 
 </div>
 
 ---
 
-## ? Features
+## ✨ Features
 
-### ?? **Connect Without Barriers**
+### 🌐 **Connect Without Barriers**
 - **Share Chats Instantly**: Create a chat and share a simple invitation code with anyone
 - **No Account Required**: Start chatting immediately without sign-ups or personal information
 - **Cross-Network Communication**: Connect with people across different networks and locations
 
-### ?? **Beautiful & Customizable**
+### 🎨 **Beautiful & Customizable**
 - **Modern Design**: Clean, intuitive interface built with the latest Windows UI
 - **Theme Options**: Choose from multiple color themes (Purple, Red, Green) or match your system theme
 - **Dark & Light Modes**: Perfect for day or night use
 
-### ?? **Privacy First**
+### 🔒 **Privacy First**
 - **No Cloud Storage**: Your messages stay on your device
 - **Secure Tunneling**: Uses Cloudflare's secure infrastructure for connections
 - **Local Control**: You decide when to start or stop sharing your chats
 
-### ? **Real-Time Communication**
+### ⚡ **Real-Time Communication**
 - **Instant Messaging**: Messages appear instantly with WebSocket technology
 - **Live Updates**: See messages as they arrive without refreshing
 - **Active Connection Status**: Know who's connected at all times
 
-### ?? **Easy to Use**
+### 🚀 **Easy to Use**
 - **One-Click Sharing**: Start sharing your chat with just one button
 - **Simple Invitations**: Share a short code to invite others
 - **Auto-Updates**: Always stay up to date with the latest features
 
 ---
 
-## ?? Getting Started
+## 🎯 Getting Started
 
 ### Installation
 
@@ -66,13 +66,13 @@
 
 ---
 
-## ??? How It Works
+## 🛠️ How It Works
 
 NexChat makes peer-to-peer communication simple and accessible:
 
 ### For Chat Creators (Hosts)
 ```
-Your Computer ? Local Web Server ? Cloudflare Tunnel ? Internet ? Friend's Computer
+Your Computer → Local Web Server → Cloudflare Tunnel → Internet → Friend's Computer
 ```
 
 When you create and start a chat:
@@ -83,7 +83,7 @@ When you create and start a chat:
 
 ### For Chat Participants
 ```
-Friend's Computer ? Cloudflare Tunnel ? Your Computer ? Messages
+Friend's Computer → Cloudflare Tunnel → Your Computer → Messages
 ```
 
 When you join a chat:
@@ -96,7 +96,7 @@ When you join a chat:
 
 ---
 
-## ?? Technologies
+## 🔧 Technologies
 
 NexChat is built with modern, robust technologies:
 
@@ -124,39 +124,39 @@ NexChat is built with modern, robust technologies:
 
 ---
 
-## ?? Themes
+## 🎨 Themes
 
 NexChat comes with beautiful themes to match your style:
 
 | Theme | Description |
 |-------|-------------|
-| ?? **Purple** | Default vibrant theme |
-| ?? **Red** | Bold and energetic |
-| ?? **Green** | Fresh and calming |
-| ?? **Dark** | Easy on the eyes |
-| ?? **Light** | Clean and bright |
-| ?? **Automatic** | Match your system settings |
+| 🟣 **Purple** | Default vibrant theme |
+| 🔴 **Red** | Bold and energetic |
+| 🟢 **Green** | Fresh and calming |
+| 🌙 **Dark** | Easy on the eyes |
+| ☀️ **Light** | Clean and bright |
+| 🔄 **Automatic** | Match your system settings |
 
 Change themes anytime from the settings menu!
 
 ---
 
-## ?? Security
+## 🔐 Security
 
 Your privacy and security are our top priorities:
 
 ### **What We Do**
-- ? All connections use Cloudflare's secure infrastructure
-- ? Messages stored locally on your device only
-- ? No user accounts or personal data collection
-- ? Open source - audit the code yourself
-- ? Regular security updates
+- ✅ All connections use Cloudflare's secure infrastructure
+- ✅ Messages stored locally on your device only
+- ✅ No user accounts or personal data collection
+- ✅ Open source - audit the code yourself
+- ✅ Regular security updates
 
 ### **What We Don't Do**
-- ? No cloud storage of your messages
-- ? No tracking or analytics
-- ? No ads or monetization
-- ? No selling your data
+- ❌ No cloud storage of your messages
+- ❌ No tracking or analytics
+- ❌ No ads or monetization
+- ❌ No selling your data
 
 ### **Reporting Security Issues**
 Found a security concern? Please report it responsibly:
@@ -165,7 +165,7 @@ Found a security concern? Please report it responsibly:
 
 ---
 
-## ?? Contributing
+## 🤝 Contributing
 
 We welcome contributions! Whether you're fixing bugs, adding features, or improving documentation:
 
@@ -177,29 +177,29 @@ We welcome contributions! Whether you're fixing bugs, adding features, or improv
 
 ---
 
-## ?? License
+## 📝 License
 
 NexChat is open source software licensed under the [MIT License](LICENSE.txt).
 
 This means you can:
-- ? Use it for free, forever
-- ? Modify it for your needs
-- ? Share it with others
-- ? Use it commercially
+- ✅ Use it for free, forever
+- ✅ Modify it for your needs
+- ✅ Share it with others
+- ✅ Use it commercially
 
 ---
 
-## ?? Show Your Support
+## 🌟 Show Your Support
 
 If you find NexChat useful, please consider:
-- ? Starring the repository
-- ?? Reporting bugs
-- ?? Suggesting new features
-- ?? Sharing with friends
+- ⭐ Starring the repository
+- 🐛 Reporting bugs
+- 💡 Suggesting new features
+- 📢 Sharing with friends
 
 ---
 
-## ?? Contact
+## 📫 Contact
 
 **Quim Alborch** - [@quimalborch](https://github.com/quimalborch)
 
@@ -209,7 +209,7 @@ If you find NexChat useful, please consider:
 
 <div align="center">
 
-**Made with ?? by Quim Alborch**
+**Made with 💜 by Quim Alborch**
 
 *Connecting people, one chat at a time.*
 
