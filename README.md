@@ -5,8 +5,12 @@
 **A modern, secure chat application for Windows that lets you connect with anyone, anywhere.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE.txt)
-[![.NET 8](https://img.shields.io/badge/.NET-8.0-512BD4)](https://dotnet.microsoft.com/)
+[![.NET 8](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/)
+[![CI/CD Velopack](https://github.com/quimalborch/NexChat/actions/workflows/velopack.yml/badge.svg)](https://github.com/quimalborch/NexChat/actions/workflows/velopack.yml)
 [![Windows](https://img.shields.io/badge/Platform-Windows-0078D6)](https://www.microsoft.com/windows)
+[![GitHub open issues by-label](https://img.shields.io/github/issues/quimalborch/NexChat/bug)](https://github.com/quimalborch/NexChat/issues?q=is%3Aissue+is%3Aopen+label%3Abug)
+[![GitHub last commit](https://img.shields.io/github/last-commit/quimalborch/NexChat)](https://github.com/quimalborch/NexChat/commits/main)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/quimalborch/NexChat)
 
 [Features](#-features) • [Getting Started](#-getting-started) • [How It Works](#-how-it-works) • [Technologies](#-technologies) • [Security](#-security)
 
