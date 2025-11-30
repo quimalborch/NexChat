@@ -179,7 +179,7 @@
                                                 Click="CopyURLMenuItem_Click" 
                                                 Tag="{x:Bind Id}">
                                             <MenuFlyoutItem.Icon>
-                                                <FontIcon Glyph="&#xE71A;"/>
+                                                <FontIcon Glyph="&#xE8C8;"/>
                                             </MenuFlyoutItem.Icon>
                                         </MenuFlyoutItem>
                                         <MenuFlyoutSeparator/>
