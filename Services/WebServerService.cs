@@ -729,7 +729,9 @@ namespace NexChat.Services
                         break;
 
                     default:
-                        responseString = $"NexChat WebServer - Unknown endpoint: {request.Url?.AbsolutePath}";
+                        // Sanitize user input to prevent XSS
+                        string sanitizedPath = WebUtility.HtmlEncode(request.Url?.AbsolutePath ?? "");
+                        responseString = $"NexChat WebServer - Unknown endpoint: {sanitizedPath}";
                         response.StatusCode = 404;
                         Console.WriteLine($"❌ Unknown endpoint: {request.Url?.AbsolutePath}");
                         break;
