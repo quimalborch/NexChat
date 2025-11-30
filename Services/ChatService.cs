@@ -446,7 +446,7 @@ namespace NexChat.Services
                 return false;
             }
             
-            if (webServer.TunnelActive is null)
+            if (!webServer.IsTunnelActive)
             {
                 Console.WriteLine($"Tunnel not active for chat '{chat.Name}', stopping server");
                 await StopWebServer(chatId);
