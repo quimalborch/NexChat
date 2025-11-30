@@ -151,6 +151,12 @@
                             <Grid Padding="12" Background="Transparent" RightTapped="ChatItem_RightTapped">
                                 <FlyoutBase.AttachedFlyout>
                                     <MenuFlyout Placement="Right" Opening="ChatContextMenu_Opening">
+                                        <MenuFlyoutItem x:Name="StartingInfoItem"
+                                                        Text="⏳ Iniciando servidor..."
+                                                        IsEnabled="False"
+                                                        Visibility="Collapsed"
+                                                        Foreground="{ThemeResource SystemAccentColor}"/>
+                                        <MenuFlyoutSeparator x:Name="StartingSeparator" Visibility="Collapsed"/>
                                         <MenuFlyoutItem x:Name="PlayMenuItem"
                                                         Text="Play" 
                                                         Click="PlayChat_Click" 

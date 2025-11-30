@@ -1083,6 +1083,10 @@ namespace NexChat
             MenuFlyoutItem playMenuItem = null;
             MenuFlyoutItem stopMenuItem = null;
             MenuFlyoutItem copyURLMenuItem = null;
+            MenuFlyoutItem editMenuItem = null;
+            MenuFlyoutItem deleteMenuItem = null;
+            MenuFlyoutItem startingInfoItem = null;
+            MenuFlyoutSeparator startingSeparator = null;
 
             foreach (var item in menuFlyout.Items)
             {
@@ -1094,21 +1098,73 @@ namespace NexChat
                         stopMenuItem = menuItem;
                     else if (menuItem.Text == "Copy Direction Code")
                         copyURLMenuItem = menuItem;
+                    else if (menuItem.Text == "Editar")
+                        editMenuItem = menuItem;
+                    else if (menuItem.Text == "Eliminar")
+                        deleteMenuItem = menuItem;
+                    else if (menuItem.Name == "StartingInfoItem")
+                        startingInfoItem = menuItem;
+                }
+                else if (item is MenuFlyoutSeparator separator)
+                {
+                    if (separator.Name == "StartingSeparator")
+                        startingSeparator = separator;
                 }
             }
 
-            // Mostrar/ocultar según el estado
+            // Deshabilitar opciones si el chat está iniciándose
+            bool isStarting = chatItem.IsStarting;
+            
+            // Mostrar/ocultar item de "Iniciando servidor..."
+            if (startingInfoItem != null)
+            {
+                startingInfoItem.Visibility = isStarting ? Visibility.Visible : Visibility.Collapsed;
+            }
+            
+            if (startingSeparator != null)
+            {
+                startingSeparator.Visibility = isStarting ? Visibility.Visible : Visibility.Collapsed;
+            }
+            
+            // Mostrar/ocultar y habilitar/deshabilitar según el estado
             if (playMenuItem != null)
+            {
                 playMenuItem.Visibility = (chatItem.IsRunning || chatItem.IsInvited) ? Visibility.Collapsed : Visibility.Visible;
+                playMenuItem.IsEnabled = !isStarting;
+            }
 
             if (stopMenuItem != null)
+            {
                 stopMenuItem.Visibility = (!chatItem.IsRunning || chatItem.IsInvited) ? Visibility.Collapsed : Visibility.Visible;
+                stopMenuItem.IsEnabled = !isStarting;
+            }
 
             // Mostrar CopyURLMenuItem solo si CodeInvitation no es null y IsInvited es false
             if (copyURLMenuItem != null)
+            {
                 copyURLMenuItem.Visibility = (!string.IsNullOrEmpty(chatItem.CodeInvitation) && !chatItem.IsInvited)
                     ? Visibility.Visible
                     : Visibility.Collapsed;
+                copyURLMenuItem.IsEnabled = !isStarting;
+            }
+            
+            // Deshabilitar Editar si está iniciándose
+            if (editMenuItem != null)
+            {
+                editMenuItem.IsEnabled = !isStarting;
+            }
+            
+            // Deshabilitar Eliminar si está iniciándose
+            if (deleteMenuItem != null)
+            {
+                deleteMenuItem.IsEnabled = !isStarting;
+            }
+            
+            // Log para debugging
+            if (isStarting)
+            {
+                Log.Debug("Chat '{ChatName}' is starting - menu items disabled", chatItem.Name);
+            }
         }
 
         private void CopyURLMenuItem_Click(object sender, RoutedEventArgs e)
