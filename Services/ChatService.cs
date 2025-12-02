@@ -148,6 +148,8 @@ namespace NexChat.Services
             // 🔐 INTERCAMBIO DE CLAVES: Obtener la clave pública del servidor remoto
             Log.Information("🔐 [KEY-EXCHANGE] Starting public key exchange with remote server...");
             
+            string? remoteHostUserIdHash = null;
+            
             try
             {
                 Log.Debug("🔑 [KEY-EXCHANGE] Fetching public key from: {ChatCode}", Name);
@@ -167,6 +169,11 @@ namespace NexChat.Services
                         remoteKeyExchange.UserIdHash.Substring(0, Math.Min(16, remoteKeyExchange.UserIdHash.Length)) + "...");
                     Log.Debug("📦 [KEY-EXCHANGE] Public key length: {Length} chars", remoteKeyExchange.PublicKeyPem?.Length ?? 0);
                     Log.Debug("📦 [KEY-EXCHANGE] Timestamp: {Timestamp}", remoteKeyExchange.Timestamp);
+                    
+                    // 🔑 GUARDAR el user ID hash del host remoto
+                    remoteHostUserIdHash = remoteKeyExchange.UserIdHash;
+                    Log.Information("💾 [KEY-EXCHANGE] Stored remote host user ID hash: {Hash}", 
+                        remoteHostUserIdHash.Substring(0, Math.Min(16, remoteHostUserIdHash.Length)) + "...");
                     
                     // Registrar la clave pública del host remoto
                     Log.Debug("📝 [KEY-EXCHANGE] Processing public key exchange...");
@@ -195,6 +202,19 @@ namespace NexChat.Services
             chatRemoto.IsInvited = true;
             chatRemoto.CodeInvitation = Name;
             chatRemoto.ConnectionStatus = ConnectionStatus.Unknown; // Estado inicial
+            
+            // 🔑 IMPORTANTE: Guardar el user ID hash del host remoto para cifrar mensajes
+            chatRemoto.RemoteHostUserIdHash = remoteHostUserIdHash;
+            
+            if (remoteHostUserIdHash != null)
+            {
+                Log.Information("✅ [CHAT] Remote host user ID hash saved for encryption: {Hash}", 
+                    remoteHostUserIdHash.Substring(0, Math.Min(16, remoteHostUserIdHash.Length)) + "...");
+            }
+            else
+            {
+                Log.Warning("⚠️ [CHAT] No remote host user ID hash - encryption will fail");
+            }
             
             // Copiar mensajes iniciales del chat recuperado
             Log.Debug("📋 [CHAT] Copying {Count} initial messages", chatRecuperado.Messages.Count);
@@ -472,38 +492,52 @@ namespace NexChat.Services
                 
                 if (chat.IsInvited)
                 {
-                    // Chat remoto: necesitamos cifrar para todos los participantes
-                    // Por ahora, usamos un enfoque simplificado donde ciframos para el host
-                    // TODO: Implementar cifrado multi-usuario
-                    recipientIdHash = CryptographyService.HashUserId(_configurationService.GetUserId());
-                    
-                    Log.Information("🔐 Attempting to encrypt message for remote chat '{ChatName}'", chat.Name);
-                    
-                    // Verificar si tenemos la clave pública del destinatario
-                    if (!_secureMessaging.CanEncryptFor(recipientIdHash))
+                    // ✅ CORRECCIÓN: Usar el RemoteHostUserIdHash guardado del host
+                    if (string.IsNullOrEmpty(chat.RemoteHostUserIdHash))
                     {
-                        Log.Warning("⚠️ Cannot encrypt: recipient public key not found");
-                        
-                        // Enviar mensaje sin cifrar con advertencia
-                        Log.Warning("⚠️ Sending UNENCRYPTED message - no public key available");
+                        Log.Error("❌ [CHAT] Cannot encrypt: RemoteHostUserIdHash is null for chat '{ChatName}'", chat.Name);
+                        Log.Warning("⚠️ [CHAT] Sending UNENCRYPTED message - no remote host ID available");
                     }
                     else
                     {
-                        // Cifrar el mensaje
-                        messageToSend = _secureMessaging.EncryptMessage(message, recipientIdHash);
-                        Log.Information("✅ Message encrypted successfully");
+                        recipientIdHash = chat.RemoteHostUserIdHash;
+                        
+                        Log.Information("🔐 [CHAT] Attempting to encrypt message for remote chat '{ChatName}'", chat.Name);
+                        Log.Debug("🔑 [CHAT] Recipient (remote host) ID hash: {Hash}", 
+                            recipientIdHash.Substring(0, Math.Min(16, recipientIdHash.Length)) + "...");
+                        
+                        // Verificar si tenemos la clave pública del destinatario
+                        if (!_secureMessaging.CanEncryptFor(recipientIdHash))
+                        {
+                            Log.Error("❌ [CHAT] Cannot encrypt: recipient public key not found for hash {Hash}", 
+                                recipientIdHash.Substring(0, Math.Min(16, recipientIdHash.Length)) + "...");
+                            
+                            // Log all registered keys for debugging
+                            Log.Debug("📋 [CHAT] Checking registered public keys...");
+                            
+                            // Enviar mensaje sin cifrar con advertencia
+                            Log.Warning("⚠️ [CHAT] Sending UNENCRYPTED message - no public key available");
+                        }
+                        else
+                        {
+                            Log.Information("✅ [CHAT] Recipient public key found - encrypting message");
+                            
+                            // Cifrar el mensaje
+                            messageToSend = _secureMessaging.EncryptMessage(message, recipientIdHash);
+                            Log.Information("✅ [CHAT] Message encrypted successfully for remote host");
+                        }
                     }
                 }
                 else
                 {
                     // Chat local: no necesitamos cifrar (solo nosotros lo vemos localmente)
                     // Pero SI ciframos para cuando se envíe a clientes conectados
-                    Log.Debug("📝 Local chat message - storing plaintext locally");
+                    Log.Debug("📝 [CHAT] Local chat message - storing plaintext locally");
                 }
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "❌ Error encrypting message");
+                Log.Error(ex, "❌ [CHAT] Error encrypting message");
                 // Continuar con mensaje sin cifrar como fallback
             }
             

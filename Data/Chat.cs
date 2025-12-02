@@ -35,6 +35,12 @@ namespace NexChat.Data
         public List<Message> Messages { get; set; }
         public bool IsInvited { get; set; } = true;
         
+        /// <summary>
+        /// Hash del User ID del host del chat remoto (solo para chats invitados)
+        /// Se usa para cifrar mensajes dirigidos al host
+        /// </summary>
+        public string? RemoteHostUserIdHash { get; set; }
+        
         public bool IsRunning 
         { 
             get => _isRunning;
