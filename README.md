@@ -149,23 +149,46 @@ Change themes anytime from the settings menu!
 
 Your privacy and security are our top priorities:
 
+### **Enhanced Security Features (v1.0+)**
+- ✅ **End-to-End Encryption (E2EE)**: Messages encrypted with RSA-2048 + AES-256-GCM
+- ✅ **Digital Signatures**: Every message is cryptographically signed for authenticity
+- ✅ **TLS Certificate Validation**: Prevents Man-in-the-Middle (MITM) attacks
+- ✅ **Salted Hashing**: User IDs protected with application-specific salt
+- ✅ **Forward Secrecy**: Each message uses a unique encryption key
+
 ### **What We Do**
-- ✅ All connections use Cloudflare's secure infrastructure
-- ✅ Messages stored locally on your device only
+- ✅ All connections use Cloudflare's secure infrastructure with TLS 1.3
+- ✅ Messages encrypted end-to-end (only you and recipient can read them)
+- ✅ Messages stored encrypted locally on your device
 - ✅ No user accounts or personal data collection
 - ✅ Open source - audit the code yourself
 - ✅ Regular security updates
+- ✅ Secure key management with RSA-2048
 
 ### **What We Don't Do**
 - ❌ No cloud storage of your messages
 - ❌ No tracking or analytics
 - ❌ No ads or monetization
 - ❌ No selling your data
+- ❌ No plain-text message transmission
+
+### **Security Architecture**
+For detailed information about NexChat's security implementation, see:
+- [Security Architecture](SECURITY_ARCHITECTURE.md) - Technical details
+- [Security Policy](SECURITY.md) - Vulnerability reporting
 
 ### **Reporting Security Issues**
 Found a security concern? Please report it responsibly:
 - Check our [Security Policy](SECURITY.md)
+- Use GitHub's Private Vulnerability Reporting
 - Report privately to [@quimalborch](https://github.com/quimalborch)
+
+### **Verified Security**
+- 🔒 **Encryption**: AES-256-GCM (AEAD)
+- 🔑 **Key Exchange**: RSA-2048 with OAEP-SHA256 padding
+- ✍️ **Signatures**: RSA-SHA256 with PKCS#1 padding
+- 🔐 **TLS**: Certificate validation enforced
+- 🛡️ **Hashing**: SHA-256 with application-specific salt
 
 ---
 
