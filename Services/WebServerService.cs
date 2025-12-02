@@ -9,6 +9,7 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Serilog;
 
 namespace NexChat.Services
 {
@@ -601,23 +602,50 @@ namespace NexChat.Services
                         // 🔐 ENDPOINT: Intercambio de claves públicas
                         try
                         {
+                            Log.Information("🔑 [SERVER] Handling /security/publickey request");
+                            Log.Debug("🔑 [SERVER] Creating SecureMessagingService...");
+                            
                             var secureMessaging = new NexChat.Security.SecureMessagingService();
+                            
+                            Log.Debug("🔑 [SERVER] Creating ConfigurationService...");
                             var configService = new ConfigurationService();
+                            
+                            Log.Debug("🔑 [SERVER] Getting user ID...");
                             string userId = configService.GetUserId();
+                            Log.Debug("🔑 [SERVER] User ID: {UserId}", userId.Substring(0, Math.Min(8, userId.Length)) + "...");
+                            
+                            Log.Debug("🔑 [SERVER] Hashing user ID...");
                             string hashedUserId = NexChat.Security.CryptographyService.HashUserId(userId);
+                            Log.Debug("🔑 [SERVER] Hashed user ID: {HashedUserId}", hashedUserId.Substring(0, Math.Min(16, hashedUserId.Length)) + "...");
                             
-                            var keyExchange = secureMessaging.CreatePublicKeyExchange(hashedUserId, configService.GetUserName());
+                            Log.Debug("🔑 [SERVER] Getting user name...");
+                            string userName = configService.GetUserName();
+                            Log.Debug("🔑 [SERVER] User name: {UserName}", userName);
                             
+                            Log.Debug("🔑 [SERVER] Creating public key exchange...");
+                            var keyExchange = secureMessaging.CreatePublicKeyExchange(hashedUserId, userName);
+                            
+                            Log.Debug("🔑 [SERVER] Serializing key exchange to JSON...");
                             responseString = System.Text.Json.JsonSerializer.Serialize(keyExchange);
+                            Log.Debug("🔑 [SERVER] JSON size: {Size} chars", responseString.Length);
+                            
                             response.StatusCode = 200;
                             response.ContentType = "application/json; charset=utf-8";
-                            Console.WriteLine("🔑 Responding with public key exchange");
+                            
+                            Log.Information("✅ [SERVER] Responding with public key exchange");
                         }
                         catch (Exception ex)
                         {
+                            Log.Error(ex, "❌ [SERVER] CRITICAL ERROR in public key exchange endpoint");
+                            Log.Error("❌ [SERVER] Exception type: {Type}", ex.GetType().Name);
+                            Log.Error("❌ [SERVER] Exception message: {Message}", ex.Message);
+                            Log.Error("❌ [SERVER] Stack trace: {StackTrace}", ex.StackTrace);
+                            
                             responseString = $"Error: {ex.Message}";
                             response.StatusCode = 500;
+                            
                             Console.WriteLine($"❌ Error in public key exchange: {ex.Message}");
+                            Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
                         }
                         break;
 
