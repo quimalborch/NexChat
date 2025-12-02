@@ -349,6 +349,23 @@ namespace NexChat.Services
                 
                 if (message.IsEncrypted)
                 {
+                    // ✅ IMPORTANTE: No descifrar mensajes propios
+                    // Los mensajes que YO envío están cifrados con la clave pública del DESTINATARIO
+                    // Por lo tanto, YO no puedo descifrarlos (no tengo su clave privada)
+                    string currentUserHashedId = CryptographyService.HashUserId(_configurationService.GetUserId());
+                    bool isMyMessage = message.Sender.Id == currentUserHashedId;
+                    
+                    if (isMyMessage)
+                    {
+                        Log.Debug("📝 [CHAT] Skipping decryption for own message (broadcast echo)");
+                        Log.Debug("💡 [CHAT] This message was encrypted for the recipient, not for us");
+                        
+                        // Ignorar este mensaje - ya lo tenemos en la UI con el texto original
+                        Console.WriteLine($"⚠️ Ignoring own message broadcast from server");
+                        return; // ✅ IMPORTANTE: No agregar mensajes propios que vienen del broadcast
+                    }
+                    
+                    // Descifrar mensajes de otros usuarios
                     try
                     {
                         Log.Information("🔐 Encrypted message received via WebSocket - decrypting");
@@ -646,6 +663,21 @@ namespace NexChat.Services
                 
                 if (message.IsEncrypted)
                 {
+                    // ✅ IMPORTANTE: No descifrar mensajes propios
+                    // Los mensajes que YO envío están cifrados con la clave pública del DESTINATARIO
+                    string currentUserHashedId = CryptographyService.HashUserId(_configurationService.GetUserId());
+                    bool isMyMessage = message.Sender.Id == currentUserHashedId;
+                    
+                    if (isMyMessage)
+                    {
+                        Log.Debug("📝 [CHAT] Skipping decryption for own message");
+                        Log.Debug("💡 [CHAT] This message was encrypted for the recipient, not for us");
+                        
+                        // El mensaje ya se agregó localmente en AddMessage con el texto plano
+                        Console.WriteLine($"⚠️ Ignoring own message received from server");
+                        return; // ✅ No agregar mensajes propios duplicados
+                    }
+                    
                     try
                     {
                         Log.Information("🔐 Encrypted message received - attempting to decrypt");
