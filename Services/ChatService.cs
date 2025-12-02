@@ -133,29 +133,53 @@ namespace NexChat.Services
 
         public async Task<bool> JoinChat(string Name)
         {
+            Log.Information("🚀 [CHAT] Joining remote chat with code: {ChatCode}", Name);
+            
             Chat? chatRecuperado = await _chatConnectorService.GetChat(Name);
 
-            if (chatRecuperado is null) return false;
+            if (chatRecuperado is null)
+            {
+                Log.Error("❌ [CHAT] Could not retrieve chat information from remote server");
+                return false;
+            }
+            
+            Log.Information("✅ [CHAT] Successfully retrieved chat info: {ChatName}", chatRecuperado.Name);
 
             // 🔐 INTERCAMBIO DE CLAVES: Obtener la clave pública del servidor remoto
+            Log.Information("🔐 [KEY-EXCHANGE] Starting public key exchange with remote server...");
+            
             try
             {
+                Log.Debug("🔑 [KEY-EXCHANGE] Fetching public key from: {ChatCode}", Name);
+                
                 var remoteKeyExchange = await _chatConnectorService.GetPublicKey(Name);
                 
-                if (remoteKeyExchange != null)
+                if (remoteKeyExchange == null)
                 {
-                    // Registrar la clave pública del host remoto
-                    _secureMessaging.ProcessPublicKeyExchange(remoteKeyExchange);
-                    Log.Information("✅ Public key exchanged with remote chat host: {DisplayName}", remoteKeyExchange.DisplayName);
+                    Log.Error("❌ [KEY-EXCHANGE] Failed to fetch public key - received null response");
+                    Log.Warning("⚠️ [KEY-EXCHANGE] Encryption will NOT be available for this chat");
                 }
                 else
                 {
-                    Log.Warning("⚠️ Could not exchange public keys - encryption will not be available");
+                    Log.Information("✅ [KEY-EXCHANGE] Received public key exchange data");
+                    Log.Debug("📦 [KEY-EXCHANGE] Remote user: {DisplayName}", remoteKeyExchange.DisplayName);
+                    Log.Debug("📦 [KEY-EXCHANGE] Remote user ID hash: {UserIdHash}", 
+                        remoteKeyExchange.UserIdHash.Substring(0, Math.Min(16, remoteKeyExchange.UserIdHash.Length)) + "...");
+                    Log.Debug("📦 [KEY-EXCHANGE] Public key length: {Length} chars", remoteKeyExchange.PublicKeyPem?.Length ?? 0);
+                    Log.Debug("📦 [KEY-EXCHANGE] Timestamp: {Timestamp}", remoteKeyExchange.Timestamp);
+                    
+                    // Registrar la clave pública del host remoto
+                    Log.Debug("📝 [KEY-EXCHANGE] Processing public key exchange...");
+                    _secureMessaging.ProcessPublicKeyExchange(remoteKeyExchange);
+                    
+                    Log.Information("✅ [KEY-EXCHANGE] Public key successfully exchanged with remote chat host: {DisplayName}", remoteKeyExchange.DisplayName);
+                    Log.Information("🔒 [KEY-EXCHANGE] E2EE encryption is now ENABLED for this chat");
                 }
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "❌ Error during public key exchange");
+                Log.Error(ex, "❌ [KEY-EXCHANGE] Exception during public key exchange");
+                Log.Warning("⚠️ [KEY-EXCHANGE] Chat will continue but encryption will NOT be available");
             }
 
             string ChatRemotoName = $"{chatRecuperado.Name}";
@@ -164,6 +188,8 @@ namespace NexChat.Services
             ChatRemotoName = ChatRemotoName.Insert(0, "[REMOTO] ");
 #endif
 
+            Log.Debug("📝 [CHAT] Creating local chat object: {ChatName}", ChatRemotoName);
+
             Chat? chatRemoto = new Chat(ChatRemotoName);
 
             chatRemoto.IsInvited = true;
@@ -171,6 +197,7 @@ namespace NexChat.Services
             chatRemoto.ConnectionStatus = ConnectionStatus.Unknown; // Estado inicial
             
             // Copiar mensajes iniciales del chat recuperado
+            Log.Debug("📋 [CHAT] Copying {Count} initial messages", chatRecuperado.Messages.Count);
             foreach (var msg in chatRecuperado.Messages)
             {
                 msg.Chat = chatRemoto;
@@ -180,9 +207,22 @@ namespace NexChat.Services
             chats.Add(chatRemoto);
             SaveChats();
             
+            Log.Information("💾 [CHAT] Chat saved locally");
+            
             // Conectar WebSocket para recibir actualizaciones en tiempo real
+            Log.Debug("🔌 [CHAT] Connecting WebSocket for real-time updates...");
             bool connected = await ConnectWebSocketForRemoteChat(chatRemoto.Id);
+            
+            if (connected)
+            {
+                Log.Information("✅ [CHAT] WebSocket connected successfully");
+            }
+            else
+            {
+                Log.Warning("⚠️ [CHAT] WebSocket connection failed - will use polling instead");
+            }
 
+            Log.Information("✅ [CHAT] Successfully joined remote chat: {ChatName}", ChatRemotoName);
             return true;
         }
 

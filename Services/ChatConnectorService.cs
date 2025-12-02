@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using NexChat.Data;
 using NexChat.Security;
+using Serilog;
 
 namespace NexChat.Services
 {
@@ -136,29 +137,58 @@ namespace NexChat.Services
             {
                 string fullUrl = $"https://{url}.trycloudflare.com/security/publickey";
                 
-                Console.WriteLine($"🔑 Fetching public key from {url}");
+                Log.Information("🔑 [CONNECTOR] Fetching public key from remote server");
+                Log.Debug("🔑 [CONNECTOR] URL: {Url}", fullUrl);
                 
                 HttpResponseMessage response = await _httpClient.GetAsync(fullUrl);
+                
+                Log.Debug("📡 [CONNECTOR] HTTP Response: {StatusCode}", response.StatusCode);
+                
                 response.EnsureSuccessStatusCode();
                 
                 string jsonContent = await response.Content.ReadAsStringAsync();
+                
+                Log.Debug("📦 [CONNECTOR] Received JSON: {Length} chars", jsonContent?.Length ?? 0);
+                
+                if (string.IsNullOrWhiteSpace(jsonContent))
+                {
+                    Log.Error("❌ [CONNECTOR] Received empty response from server");
+                    return null;
+                }
                 
                 PublicKeyExchange? keyExchange = JsonSerializer.Deserialize<PublicKeyExchange>(jsonContent, new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
                 });
                 
-                Console.WriteLine($"✅ Public key fetched successfully for user: {keyExchange?.DisplayName}");
+                if (keyExchange == null)
+                {
+                    Log.Error("❌ [CONNECTOR] Failed to deserialize public key exchange");
+                    return null;
+                }
+                
+                Log.Information("✅ [CONNECTOR] Public key fetched successfully");
+                Log.Debug("📦 [CONNECTOR] User: {DisplayName}", keyExchange.DisplayName);
+                Log.Debug("📦 [CONNECTOR] User ID hash: {UserIdHash}", 
+                    keyExchange.UserIdHash.Substring(0, Math.Min(16, keyExchange.UserIdHash.Length)) + "...");
+                Log.Debug("📦 [CONNECTOR] Public key length: {Length} chars", keyExchange.PublicKeyPem?.Length ?? 0);
+                
                 return keyExchange;
             }
             catch (HttpRequestException ex)
             {
-                Console.WriteLine($"❌ Error fetching public key: {ex.Message}");
+                Log.Error(ex, "❌ [CONNECTOR] HTTP error fetching public key");
+                Log.Debug("❌ [CONNECTOR] Status code: {StatusCode}", ex.StatusCode);
                 return null;
             }
             catch (JsonException ex)
             {
-                Console.WriteLine($"❌ Error deserializing public key: {ex.Message}");
+                Log.Error(ex, "❌ [CONNECTOR] JSON deserialization error");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "❌ [CONNECTOR] Unexpected error fetching public key");
                 return null;
             }
         }
