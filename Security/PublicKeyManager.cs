@@ -27,10 +27,26 @@ namespace NexChat.Security
                 "Keys"
             );
 
+            // Crear carpeta si no existe
             Directory.CreateDirectory(_keysFolder);
 
             _publicKeysFile = Path.Combine(_keysFolder, "public_keys.json");
             _publicKeys = new Dictionary<string, UserPublicKey>();
+
+            // Crear archivo vacío si no existe
+            if (!File.Exists(_publicKeysFile))
+            {
+                try
+                {
+                    // Crear archivo con un JSON vacío
+                    File.WriteAllText(_publicKeysFile, "{}");
+                    Log.Information("Created empty public keys file: {Path}", _publicKeysFile);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "Could not create public keys file: {Path}", _publicKeysFile);
+                }
+            }
 
             LoadPublicKeys();
             
@@ -49,6 +65,15 @@ namespace NexChat.Security
                     if (File.Exists(_publicKeysFile))
                     {
                         string json = File.ReadAllText(_publicKeysFile);
+                        
+                        // Si el archivo está vacío o solo tiene {}, inicializar diccionario vacío
+                        if (string.IsNullOrWhiteSpace(json) || json.Trim() == "{}")
+                        {
+                            _publicKeys = new Dictionary<string, UserPublicKey>();
+                            Log.Information("Public keys file is empty, starting with empty dictionary");
+                            return;
+                        }
+                        
                         var keys = JsonSerializer.Deserialize<Dictionary<string, UserPublicKey>>(json);
                         
                         if (keys != null)
@@ -56,6 +81,32 @@ namespace NexChat.Security
                             _publicKeys = keys;
                             Log.Information("Loaded {Count} public keys from disk", _publicKeys.Count);
                         }
+                        else
+                        {
+                            _publicKeys = new Dictionary<string, UserPublicKey>();
+                            Log.Warning("Could not deserialize public keys, starting with empty dictionary");
+                        }
+                    }
+                    else
+                    {
+                        Log.Warning("Public keys file not found: {Path}", _publicKeysFile);
+                        _publicKeys = new Dictionary<string, UserPublicKey>();
+                    }
+                }
+                catch (JsonException jex)
+                {
+                    Log.Error(jex, "Invalid JSON in public keys file, starting fresh");
+                    _publicKeys = new Dictionary<string, UserPublicKey>();
+                    
+                    // Intentar recrear el archivo con un JSON vacío válido
+                    try
+                    {
+                        File.WriteAllText(_publicKeysFile, "{}");
+                        Log.Information("Recreated public keys file with empty JSON");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "Could not recreate public keys file");
                     }
                 }
                 catch (Exception ex)
