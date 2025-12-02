@@ -394,7 +394,7 @@ namespace NexChat
 
         private ChatService CreateChatService()
         {
-            return new ChatService(_cloudflaredService, _chatConnectorService);
+            return new ChatService(_cloudflaredService, _chatConnectorService, _configurationService);
         }
 
         private async void MainWindow_Activated(object sender, WindowActivatedEventArgs e)

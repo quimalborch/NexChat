@@ -1,5 +1,6 @@
 ﻿using Microsoft.UI.Xaml.Controls;
 using NexChat.Data;
+using NexChat.Security;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -8,6 +9,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Serilog;
 
 namespace NexChat.Services
 {
@@ -18,16 +20,26 @@ namespace NexChat.Services
         private Dictionary<string, WebServerService> _webServers = new Dictionary<string, WebServerService>();
         private CloudflaredService _cloudflaredService;
         private ChatConnectorService _chatConnectorService;
+        private ConfigurationService _configurationService;
+        
+        // 🔐 SEGURIDAD: Servicio de cifrado E2EE
+        private SecureMessagingService _secureMessaging;
         
         // WebSocket connections para chats remotos
         private Dictionary<string, ChatWebSocketService> _webSocketConnections = new Dictionary<string, ChatWebSocketService>();
 
         private bool _disposed = false;
 
-        public ChatService(CloudflaredService cloudflaredService, ChatConnectorService chatConnectorService) 
+        public ChatService(CloudflaredService cloudflaredService, ChatConnectorService chatConnectorService, ConfigurationService configurationService) 
         {
             _cloudflaredService = cloudflaredService;
             _chatConnectorService = chatConnectorService;
+            _configurationService = configurationService;
+            
+            // 🔐 Inicializar servicio de cifrado
+            _secureMessaging = new SecureMessagingService();
+            Log.Information("✅ SecureMessagingService initialized - E2EE enabled");
+            
             LoadChats();
         }
 
@@ -125,6 +137,27 @@ namespace NexChat.Services
 
             if (chatRecuperado is null) return false;
 
+            // 🔐 INTERCAMBIO DE CLAVES: Obtener la clave pública del servidor remoto
+            try
+            {
+                var remoteKeyExchange = await _chatConnectorService.GetPublicKey(Name);
+                
+                if (remoteKeyExchange != null)
+                {
+                    // Registrar la clave pública del host remoto
+                    _secureMessaging.ProcessPublicKeyExchange(remoteKeyExchange);
+                    Log.Information("✅ Public key exchanged with remote chat host: {DisplayName}", remoteKeyExchange.DisplayName);
+                }
+                else
+                {
+                    Log.Warning("⚠️ Could not exchange public keys - encryption will not be available");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "❌ Error during public key exchange");
+            }
+
             string ChatRemotoName = $"{chatRecuperado.Name}";
 
 #if DEBUG
@@ -149,8 +182,6 @@ namespace NexChat.Services
             
             // Conectar WebSocket para recibir actualizaciones en tiempo real
             bool connected = await ConnectWebSocketForRemoteChat(chatRemoto.Id);
-            
-            // El estado de conexión se actualizará automáticamente en ConnectWebSocketForRemoteChat
 
             return true;
         }
@@ -251,13 +282,31 @@ namespace NexChat.Services
                 if (chat == null)
                     return;
 
-                Console.WriteLine($"📩 New message received via WebSocket for chat '{chat.Name}': {message.Content}");
+                Console.WriteLine($"📩 New message received via WebSocket for chat '{chat.Name}'");
+
+                // 🔐 Descifrar mensaje si está cifrado
+                Message messageToStore = message;
+                
+                if (message.IsEncrypted)
+                {
+                    try
+                    {
+                        Log.Information("🔐 Encrypted message received via WebSocket - decrypting");
+                        messageToStore = _secureMessaging.DecryptMessage(message);
+                        Log.Information("✅ Message decrypted: {Content}", messageToStore.Content);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "❌ Failed to decrypt WebSocket message");
+                        messageToStore.Content = "[🔒 Mensaje cifrado - no se pudo descifrar]";
+                    }
+                }
 
                 // Verificar que el mensaje no exista ya (evitar duplicados)
-                if (!chat.Messages.Any(m => m.Id == message.Id))
+                if (!chat.Messages.Any(m => m.Id == messageToStore.Id))
                 {
-                    message.Chat = chat;
-                    chat.Messages.Add(message);
+                    messageToStore.Chat = chat;
+                    chat.Messages.Add(messageToStore);
                     
                     // Notificar a la UI
                     ChatListUpdated?.Invoke(this, chats);
@@ -266,7 +315,7 @@ namespace NexChat.Services
                 }
                 else
                 {
-                    Console.WriteLine($"⚠️ Duplicate message ignored: {message.Id}");
+                    Console.WriteLine($"⚠️ Duplicate message ignored: {messageToStore.Id}");
                 }
             }
             catch (Exception ex)
@@ -373,12 +422,57 @@ namespace NexChat.Services
             Chat? chat = GetChatById(chatId);
             if (chat is null) return;
             
+            // 🔐 CIFRAR EL MENSAJE antes de enviarlo
+            Message messageToSend = message;
+            
+            try
+            {
+                // Obtener el hash del ID del destinatario (para chats remotos) o del propio usuario (chats locales)
+                string recipientIdHash;
+                
+                if (chat.IsInvited)
+                {
+                    // Chat remoto: necesitamos cifrar para todos los participantes
+                    // Por ahora, usamos un enfoque simplificado donde ciframos para el host
+                    // TODO: Implementar cifrado multi-usuario
+                    recipientIdHash = CryptographyService.HashUserId(_configurationService.GetUserId());
+                    
+                    Log.Information("🔐 Attempting to encrypt message for remote chat '{ChatName}'", chat.Name);
+                    
+                    // Verificar si tenemos la clave pública del destinatario
+                    if (!_secureMessaging.CanEncryptFor(recipientIdHash))
+                    {
+                        Log.Warning("⚠️ Cannot encrypt: recipient public key not found");
+                        
+                        // Enviar mensaje sin cifrar con advertencia
+                        Log.Warning("⚠️ Sending UNENCRYPTED message - no public key available");
+                    }
+                    else
+                    {
+                        // Cifrar el mensaje
+                        messageToSend = _secureMessaging.EncryptMessage(message, recipientIdHash);
+                        Log.Information("✅ Message encrypted successfully");
+                    }
+                }
+                else
+                {
+                    // Chat local: no necesitamos cifrar (solo nosotros lo vemos localmente)
+                    // Pero SI ciframos para cuando se envíe a clientes conectados
+                    Log.Debug("📝 Local chat message - storing plaintext locally");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "❌ Error encrypting message");
+                // Continuar con mensaje sin cifrar como fallback
+            }
+            
             // Si es un chat remoto, enviar mensaje por WebSocket
             if (chat.IsInvited && _webSocketConnections.TryGetValue(chatId, out var wsService))
             {
                 try
                 {
-                    bool sent = await wsService.SendMessageAsync(message);
+                    bool sent = await wsService.SendMessageAsync(messageToSend);
                     if (sent)
                     {
                         chat.ConnectionStatus = ConnectionStatus.Connected;
@@ -390,16 +484,16 @@ namespace NexChat.Services
                         Console.WriteLine($"❌ Failed to send message via WebSocket, falling back to HTTP");
                         
                         // Fallback a HTTP POST si WebSocket falla
-                        bool httpSent = await _chatConnectorService.SendMessage(chat.CodeInvitation!, message);
+                        bool httpSent = await _chatConnectorService.SendMessage(chat.CodeInvitation!, messageToSend);
                         
                         if (httpSent)
                         {
                             chat.ConnectionStatus = ConnectionStatus.Connected;
                             // Con HTTP no hay broadcast automático, así que agregamos el mensaje manualmente
-                            message.Chat = chat;
-                            if (!chat.Messages.Any(m => m.Id == message.Id))
+                            messageToSend.Chat = chat;
+                            if (!chat.Messages.Any(m => m.Id == messageToSend.Id))
                             {
-                                chat.Messages.Add(message);
+                                chat.Messages.Add(messageToSend);
                                 SaveChats();
                                 Console.WriteLine($"✓ Message added locally after HTTP fallback");
                             }
@@ -424,15 +518,15 @@ namespace NexChat.Services
                 // No hay WebSocket, intentar HTTP directamente
                 try
                 {
-                    bool httpSent = await _chatConnectorService.SendMessage(chat.CodeInvitation!, message);
+                    bool httpSent = await _chatConnectorService.SendMessage(chat.CodeInvitation!, messageToSend);
                     
                     if (httpSent)
                     {
                         chat.ConnectionStatus = ConnectionStatus.Connected;
-                        message.Chat = chat;
-                        if (!chat.Messages.Any(m => m.Id == message.Id))
+                        messageToSend.Chat = chat;
+                        if (!chat.Messages.Any(m => m.Id == messageToSend.Id))
                         {
-                            chat.Messages.Add(message);
+                            chat.Messages.Add(messageToSend);
                             SaveChats();
                         }
                     }
@@ -457,7 +551,7 @@ namespace NexChat.Services
                 // Si el chat tiene un servidor web activo, broadcast a los clientes conectados
                 if (_webServers.TryGetValue(chatId, out var webServer))
                 {
-                    await webServer.BroadcastMessage(message);
+                    await webServer.BroadcastMessage(messageToSend);
                 }
             }
         }
@@ -473,13 +567,31 @@ namespace NexChat.Services
                     return;
                 }
 
+                // 🔐 DESCIFRAR EL MENSAJE si está cifrado
+                Message messageToStore = message;
+                
+                if (message.IsEncrypted)
+                {
+                    try
+                    {
+                        Log.Information("🔐 Encrypted message received - attempting to decrypt");
+                        messageToStore = _secureMessaging.DecryptMessage(message);
+                        Log.Information("✅ Message decrypted successfully: {Content}", messageToStore.Content);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "❌ Failed to decrypt message");
+                        // Guardar mensaje cifrado con placeholder
+                        messageToStore.Content = "[🔒 Mensaje cifrado - no se pudo descifrar]";
+                    }
+                }
+
                 // IMPORTANTE: Asignar el Chat al mensaje
-                // Esto es necesario porque al deserializar JSON, la propiedad Chat (marcada con JsonIgnore) es null
-                message.Chat = chat;
+                messageToStore.Chat = chat;
                 
-                Console.WriteLine($"📥 Receiving message for chat '{chat.Name}': {message.Content}");
+                Console.WriteLine($"📥 Receiving message for chat '{chat.Name}': {messageToStore.Content}");
                 
-                chat.Messages.Add(message);
+                chat.Messages.Add(messageToStore);
                 SaveChats();
                 
                 Console.WriteLine($"✓ Message added to chat '{chat.Name}' (Total messages: {chat.Messages.Count})");
@@ -714,6 +826,10 @@ namespace NexChat.Services
                         Console.WriteLine($"Error disconnecting WebSocket during dispose: {ex.Message}");
                     }
                 }
+                
+                // Dispose SecureMessagingService
+                _secureMessaging?.Dispose();
+                Log.Information("SecureMessagingService disposed");
                 
                 // Dispose CloudflaredService (esto cerrará todos los túneles)
                 if (_cloudflaredService is IDisposable disposable)

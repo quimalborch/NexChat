@@ -597,6 +597,30 @@ namespace NexChat.Services
                         Console.WriteLine("📝 Responding to /ping with pong");
                         break;
 
+                    case "/security/publickey":
+                        // 🔐 ENDPOINT: Intercambio de claves públicas
+                        try
+                        {
+                            var secureMessaging = new NexChat.Security.SecureMessagingService();
+                            var configService = new ConfigurationService();
+                            string userId = configService.GetUserId();
+                            string hashedUserId = NexChat.Security.CryptographyService.HashUserId(userId);
+                            
+                            var keyExchange = secureMessaging.CreatePublicKeyExchange(hashedUserId, configService.GetUserName());
+                            
+                            responseString = System.Text.Json.JsonSerializer.Serialize(keyExchange);
+                            response.StatusCode = 200;
+                            response.ContentType = "application/json; charset=utf-8";
+                            Console.WriteLine("🔑 Responding with public key exchange");
+                        }
+                        catch (Exception ex)
+                        {
+                            responseString = $"Error: {ex.Message}";
+                            response.StatusCode = 500;
+                            Console.WriteLine($"❌ Error in public key exchange: {ex.Message}");
+                        }
+                        break;
+
                     case "/chat/getchat":
                         if (_chatId is null)
                         {

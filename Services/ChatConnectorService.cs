@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using NexChat.Data;
+using NexChat.Security;
 
 namespace NexChat.Services
 {
@@ -123,6 +124,42 @@ namespace NexChat.Services
                 // Manejar errores de serialización
                 Console.WriteLine($"Error al serializar JSON: {ex.Message}");
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// 🔐 Obtiene la clave pública del servidor remoto
+        /// </summary>
+        public async Task<PublicKeyExchange?> GetPublicKey(string url)
+        {
+            try
+            {
+                string fullUrl = $"https://{url}.trycloudflare.com/security/publickey";
+                
+                Console.WriteLine($"🔑 Fetching public key from {url}");
+                
+                HttpResponseMessage response = await _httpClient.GetAsync(fullUrl);
+                response.EnsureSuccessStatusCode();
+                
+                string jsonContent = await response.Content.ReadAsStringAsync();
+                
+                PublicKeyExchange? keyExchange = JsonSerializer.Deserialize<PublicKeyExchange>(jsonContent, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+                
+                Console.WriteLine($"✅ Public key fetched successfully for user: {keyExchange?.DisplayName}");
+                return keyExchange;
+            }
+            catch (HttpRequestException ex)
+            {
+                Console.WriteLine($"❌ Error fetching public key: {ex.Message}");
+                return null;
+            }
+            catch (JsonException ex)
+            {
+                Console.WriteLine($"❌ Error deserializing public key: {ex.Message}");
+                return null;
             }
         }
     }
