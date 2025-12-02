@@ -206,7 +206,7 @@ namespace NexChat.Security
 
                 byte[] key = aes.Key;
                 
-                // ✅ CORRECCIÓN: Generar nonce de 12 bytes (96 bits) para AES-GCM
+                // ✅ Generar nonce de 12 bytes (96 bits) para AES-GCM
                 // AES-GCM requiere específicamente un nonce de 12 bytes
                 byte[] nonce = new byte[12];
                 RandomNumberGenerator.Fill(nonce);
@@ -216,14 +216,11 @@ namespace NexChat.Security
                 // Cifrar el mensaje con AES-GCM
                 Log.Debug("🔒 [CRYPTO] Encrypting message with AES-GCM...");
                 byte[] plaintextBytes = Encoding.UTF8.GetBytes(plaintext);
-                byte[] ciphertext;
-                byte[] tag;
+                byte[] ciphertext = new byte[plaintextBytes.Length];
+                byte[] tag = new byte[AesGcm.TagByteSizes.MaxSize];
 
                 using (var gcm = new AesGcm(key))
                 {
-                    ciphertext = new byte[plaintextBytes.Length];
-                    tag = new byte[AesGcm.TagByteSizes.MaxSize];
-                    
                     gcm.Encrypt(nonce, plaintextBytes, ciphertext, tag);
                 }
                 
@@ -239,7 +236,7 @@ namespace NexChat.Security
                 {
                     Ciphertext = Convert.ToBase64String(ciphertext),
                     EncryptedKey = Convert.ToBase64String(encryptedKey),
-                    IV = Convert.ToBase64String(nonce), // Ahora es el nonce de 12 bytes
+                    IV = Convert.ToBase64String(nonce), // Nonce de 12 bytes
                     Tag = Convert.ToBase64String(tag)
                 };
 
@@ -287,7 +284,7 @@ namespace NexChat.Security
                 // Descifrar el mensaje con AES-GCM
                 Log.Debug("🔓 [CRYPTO] Decrypting message with AES-GCM...");
                 byte[] ciphertext = Convert.FromBase64String(encrypted.Ciphertext);
-                byte[] nonce = Convert.FromBase64String(encrypted.IV); // Este es el nonce de 12 bytes
+                byte[] nonce = Convert.FromBase64String(encrypted.IV); // Nonce de 12 bytes
                 byte[] tag = Convert.FromBase64String(encrypted.Tag);
                 byte[] plaintext = new byte[ciphertext.Length];
 
