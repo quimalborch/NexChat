@@ -1,6 +1,8 @@
 using NexChat.Data;
 using System;
 using System.Net.WebSockets;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -39,12 +41,16 @@ namespace NexChat.Services
                 Console.WriteLine($"?? Connecting to WebSocket: {wsUrl}");
 
                 _webSocket = new ClientWebSocket();
+                
+                // SEGURIDAD: Configurar validación de certificados TLS
+                ConfigureTlsValidation(_webSocket);
+                
                 _cancellationTokenSource = new CancellationTokenSource();
 
                 // Conectar al WebSocket
                 await _webSocket.ConnectAsync(new Uri(wsUrl), _cancellationTokenSource.Token);
 
-                Console.WriteLine($"? WebSocket connected successfully to {wsUrl}");
+                Console.WriteLine($"? WebSocket connected securely to {wsUrl}");
                 ConnectionStatusChanged?.Invoke(this, "Connected");
 
                 // Iniciar tarea para recibir mensajes
@@ -59,6 +65,86 @@ namespace NexChat.Services
                 Cleanup();
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Configura la validación de certificados TLS para conexiones seguras
+        /// </summary>
+        private void ConfigureTlsValidation(ClientWebSocket webSocket)
+        {
+            try
+            {
+                // Configurar opciones de TLS/SSL
+                webSocket.Options.RemoteCertificateValidationCallback = ValidateServerCertificate;
+                
+                Console.WriteLine("? TLS certificate validation configured");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"?? Could not configure TLS validation: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Valida el certificado del servidor para prevenir ataques MITM
+        /// </summary>
+        private bool ValidateServerCertificate(
+            object sender,
+            X509Certificate? certificate,
+            X509Chain? chain,
+            SslPolicyErrors sslPolicyErrors)
+        {
+            // Si no hay errores, el certificado es válido
+            if (sslPolicyErrors == SslPolicyErrors.None)
+            {
+                Console.WriteLine("? Server certificate is valid");
+                return true;
+            }
+
+            // Log de errores de certificado
+            Console.WriteLine($"?? SSL Certificate Error: {sslPolicyErrors}");
+
+            if (certificate != null)
+            {
+                Console.WriteLine($"   Certificate Subject: {certificate.Subject}");
+                Console.WriteLine($"   Certificate Issuer: {certificate.Issuer}");
+            }
+
+            // Para Cloudflare Tunnel (.trycloudflare.com), validar el certificado
+            if (certificate != null && certificate.Subject.Contains("cloudflare", StringComparison.OrdinalIgnoreCase))
+            {
+                // Cloudflare tiene certificados válidos, pero el nombre puede no coincidir exactamente
+                // debido al uso de subdominios dinámicos
+                if ((sslPolicyErrors & SslPolicyErrors.RemoteCertificateNameMismatch) == SslPolicyErrors.RemoteCertificateNameMismatch)
+                {
+                    Console.WriteLine("?? Certificate name mismatch for Cloudflare Tunnel - this may be expected");
+                    
+                    // Verificar que al menos la cadena de certificados sea válida
+                    if (chain != null && chain.ChainStatus.Length == 0)
+                    {
+                        Console.WriteLine("? Certificate chain is valid, accepting connection");
+                        return true;
+                    }
+                }
+            }
+
+            // Rechazar certificados con errores graves
+            if ((sslPolicyErrors & SslPolicyErrors.RemoteCertificateChainErrors) == SslPolicyErrors.RemoteCertificateChainErrors)
+            {
+                Console.WriteLine("? Certificate chain has errors - rejecting connection");
+                return false;
+            }
+
+            // Para desarrollo local (localhost), permitir certificados auto-firmados
+            if (certificate != null && certificate.Subject.Contains("localhost", StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine("?? Accepting self-signed certificate for localhost (development only)");
+                return true;
+            }
+
+            // Por defecto, rechazar el certificado si hay errores
+            Console.WriteLine("? Rejecting invalid certificate");
+            return false;
         }
 
         private async Task ReceiveMessagesAsync(CancellationToken cancellationToken)
@@ -166,8 +252,8 @@ namespace NexChat.Services
                 return false;
             }
 
-            //Pass Sender Id to SHA256 for privacity
-            message.Sender.Id = Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(message.Sender.Id)));
+            // SEGURIDAD: Usar hash con salt en lugar de SHA256 simple
+            message.Sender.Id = NexChat.Security.CryptographyService.HashUserId(message.Sender.Id);
 
             try
             {

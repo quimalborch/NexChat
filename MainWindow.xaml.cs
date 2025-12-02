@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using NexChat.Data;
 using NexChat.Services;
+using NexChat.Security;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -813,8 +814,8 @@ namespace NexChat
             var messagesPanel = content.FindName("MessagesPanel") as StackPanel;
             if (messagesPanel == null) return;
 
-            string currentUserHashed = Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(_configurationService.GetOrCreateConfiguration().idUsuario)))
-;
+            // SEGURIDAD: Usar hash con salt en lugar de SHA256 simple
+            string currentUserHashed = CryptographyService.HashUserId(_configurationService.GetOrCreateConfiguration().idUsuario);
             bool isMyMessage = message.Sender.Id == currentUserHashed;
 
             bool isCertified = _configurationService.IsCertifiedUser(message.Sender.Id);
@@ -961,9 +962,9 @@ namespace NexChat
 
             string messageContent = messageInputBox.Text;
 
-            string senderId = Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(_configurationService.GetOrCreateConfiguration().idUsuario)));
+            // SEGURIDAD: Usar hash con salt en lugar de SHA256 simple
+            string senderId = CryptographyService.HashUserId(_configurationService.GetOrCreateConfiguration().idUsuario);
 
-            //TODO: Implementar lógica de envío de mensaje a través del ChatService a la red
             var _sender = new Sender(senderId) { Name = RecuperarName() };
             var message = new Message(_selectedChat, _sender, messageContent);
 

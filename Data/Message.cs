@@ -16,6 +16,41 @@ namespace NexChat.Data
         public string Content { get; set; }
         public DateTime Timestamp { get; set; } = DateTime.UtcNow;
 
+        /// <summary>
+        /// Indica si el mensaje está cifrado
+        /// </summary>
+        public bool IsEncrypted { get; set; } = false;
+
+        /// <summary>
+        /// Texto cifrado en Base64 (si IsEncrypted = true)
+        /// </summary>
+        public string? EncryptedContent { get; set; }
+
+        /// <summary>
+        /// Clave AES cifrada con RSA en Base64
+        /// </summary>
+        public string? EncryptedKey { get; set; }
+
+        /// <summary>
+        /// Vector de inicialización en Base64
+        /// </summary>
+        public string? IV { get; set; }
+
+        /// <summary>
+        /// Tag de autenticación GCM en Base64
+        /// </summary>
+        public string? AuthTag { get; set; }
+
+        /// <summary>
+        /// Firma digital del mensaje para verificar autenticidad
+        /// </summary>
+        public string? Signature { get; set; }
+
+        /// <summary>
+        /// Clave pública RSA del remitente en formato PEM
+        /// </summary>
+        public string? SenderPublicKey { get; set; }
+
         public Message()
         {
         }
