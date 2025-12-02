@@ -406,7 +406,54 @@ namespace NexChat
                 // Desuscribirse para que solo se ejecute una vez
                 this.Activated -= MainWindow_Activated;
 
+                // Inicializar el EmojiPicker en el Flyout
+                InitializeEmojiPicker();
+
                 await InitializeAsync();
+            }
+        }
+
+        private void InitializeEmojiPicker()
+        {
+            var content = this.Content as FrameworkElement;
+            if (content == null) return;
+
+            var emojiButton = content.FindName("EmojiButton") as Button;
+            if (emojiButton?.Flyout is Flyout flyout)
+            {
+                var emojiPicker = new Controls.EmojiPicker();
+                emojiPicker.EmojiSelected += EmojiPicker_EmojiSelected;
+                flyout.Content = emojiPicker;
+            }
+        }
+
+        private void EmojiPicker_EmojiSelected(object sender, string emoji)
+        {
+            // Insertar el emoji en el TextBox del mensaje
+            var content = this.Content as FrameworkElement;
+            if (content == null) return;
+
+            var messageInputBox = content.FindName("MessageInputBox") as TextBox;
+            if (messageInputBox == null) return;
+
+            // Insertar el emoji en la posición del cursor
+            int selectionStart = messageInputBox.SelectionStart;
+            string currentText = messageInputBox.Text ?? string.Empty;
+            
+            // Insertar el emoji
+            messageInputBox.Text = currentText.Insert(selectionStart, emoji);
+            
+            // Mover el cursor después del emoji
+            messageInputBox.SelectionStart = selectionStart + emoji.Length;
+            
+            // Mantener el foco en el TextBox
+            messageInputBox.Focus(FocusState.Programmatic);
+            
+            // Cerrar el flyout
+            var emojiButton = content.FindName("EmojiButton") as Button;
+            if (emojiButton?.Flyout is Flyout flyout)
+            {
+                flyout.Hide();
             }
         }
 
