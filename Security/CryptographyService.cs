@@ -203,12 +203,15 @@ namespace NexChat.Security
                 using var aes = Aes.Create();
                 aes.KeySize = 256;
                 aes.GenerateKey();
-                aes.GenerateIV();
 
                 byte[] key = aes.Key;
-                byte[] iv = aes.IV;
                 
-                Log.Debug("🔑 [CRYPTO] AES key: {KeySize} bits, IV: {IVSize} bytes", key.Length * 8, iv.Length);
+                // ✅ CORRECCIÓN: Generar nonce de 12 bytes (96 bits) para AES-GCM
+                // AES-GCM requiere específicamente un nonce de 12 bytes
+                byte[] nonce = new byte[12];
+                RandomNumberGenerator.Fill(nonce);
+                
+                Log.Debug("🔑 [CRYPTO] AES key: {KeySize} bits, Nonce: {NonceSize} bytes", key.Length * 8, nonce.Length);
 
                 // Cifrar el mensaje con AES-GCM
                 Log.Debug("🔒 [CRYPTO] Encrypting message with AES-GCM...");
@@ -221,7 +224,7 @@ namespace NexChat.Security
                     ciphertext = new byte[plaintextBytes.Length];
                     tag = new byte[AesGcm.TagByteSizes.MaxSize];
                     
-                    gcm.Encrypt(iv, plaintextBytes, ciphertext, tag);
+                    gcm.Encrypt(nonce, plaintextBytes, ciphertext, tag);
                 }
                 
                 Log.Debug("🔒 [CRYPTO] Ciphertext: {Size} bytes, Tag: {TagSize} bytes", ciphertext.Length, tag.Length);
@@ -236,14 +239,14 @@ namespace NexChat.Security
                 {
                     Ciphertext = Convert.ToBase64String(ciphertext),
                     EncryptedKey = Convert.ToBase64String(encryptedKey),
-                    IV = Convert.ToBase64String(iv),
+                    IV = Convert.ToBase64String(nonce), // Ahora es el nonce de 12 bytes
                     Tag = Convert.ToBase64String(tag)
                 };
 
                 Log.Information("✅ [CRYPTO] Message encrypted successfully");
                 Log.Debug("📦 [CRYPTO] Ciphertext (Base64): {Size} chars", encrypted.Ciphertext.Length);
                 Log.Debug("📦 [CRYPTO] Encrypted key (Base64): {Size} chars", encrypted.EncryptedKey.Length);
-                Log.Debug("📦 [CRYPTO] IV (Base64): {Size} chars", encrypted.IV.Length);
+                Log.Debug("📦 [CRYPTO] Nonce (Base64): {Size} chars", encrypted.IV.Length);
                 Log.Debug("📦 [CRYPTO] Tag (Base64): {Size} chars", encrypted.Tag.Length);
                 
                 return encrypted;
@@ -272,7 +275,7 @@ namespace NexChat.Security
                 
                 Log.Debug("📦 [CRYPTO] Ciphertext (Base64): {Size} chars", encrypted.Ciphertext?.Length ?? 0);
                 Log.Debug("📦 [CRYPTO] Encrypted key (Base64): {Size} chars", encrypted.EncryptedKey?.Length ?? 0);
-                Log.Debug("📦 [CRYPTO] IV (Base64): {Size} chars", encrypted.IV?.Length ?? 0);
+                Log.Debug("📦 [CRYPTO] Nonce (Base64): {Size} chars", encrypted.IV?.Length ?? 0);
                 Log.Debug("📦 [CRYPTO] Tag (Base64): {Size} chars", encrypted.Tag?.Length ?? 0);
                 
                 // Descifrar la clave AES con nuestra clave privada RSA
@@ -284,13 +287,13 @@ namespace NexChat.Security
                 // Descifrar el mensaje con AES-GCM
                 Log.Debug("🔓 [CRYPTO] Decrypting message with AES-GCM...");
                 byte[] ciphertext = Convert.FromBase64String(encrypted.Ciphertext);
-                byte[] iv = Convert.FromBase64String(encrypted.IV);
+                byte[] nonce = Convert.FromBase64String(encrypted.IV); // Este es el nonce de 12 bytes
                 byte[] tag = Convert.FromBase64String(encrypted.Tag);
                 byte[] plaintext = new byte[ciphertext.Length];
 
                 using (var gcm = new AesGcm(key))
                 {
-                    gcm.Decrypt(iv, ciphertext, tag, plaintext);
+                    gcm.Decrypt(nonce, ciphertext, tag, plaintext);
                 }
 
                 string decryptedText = Encoding.UTF8.GetString(plaintext);
