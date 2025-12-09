@@ -1,4 +1,4 @@
-using Microsoft.UI.Xaml;
+﻿using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using NexChat.Data;
 using System;
@@ -29,11 +29,15 @@ namespace NexChat.Controls
             
             var recentButton = new Button
             {
-                Content = "??",
+                Content = "⌚",
                 Style = (Style)Application.Current.Resources["SubtleButtonStyle"],
-                Width = 40,
-                Height = 40,
+                FontSize = 20,
+                Width = 44,
+                Height = 44,
+                Padding = new Thickness(0),
                 Margin = new Thickness(2),
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center,
                 Tag = "Recent"
             };
             recentButton.Click += CategoryButton_Click;
@@ -45,9 +49,13 @@ namespace NexChat.Controls
                 {
                     Content = category.Icon,
                     Style = (Style)Application.Current.Resources["SubtleButtonStyle"],
-                    Width = 40,
-                    Height = 40,
+                    FontSize = 20,
+                    Width = 44,
+                    Height = 44,
+                    Padding = new Thickness(0),
                     Margin = new Thickness(2),
+                    HorizontalContentAlignment = HorizontalAlignment.Center,
+                    VerticalContentAlignment = VerticalAlignment.Center,
                     Tag = category
                 };
                 button.Click += CategoryButton_Click;
@@ -94,11 +102,14 @@ namespace NexChat.Controls
                 var button = new Button
                 {
                     Content = emoji,
-                    FontSize = 24,
-                    Width = 48,
-                    Height = 48,
+                    FontSize = 28,
+                    Width = 54,
+                    Height = 54,
+                    Padding = new Thickness(0),
                     Margin = new Thickness(2),
                     Style = (Style)Application.Current.Resources["SubtleButtonStyle"],
+                    HorizontalContentAlignment = HorizontalAlignment.Center,
+                    VerticalContentAlignment = VerticalAlignment.Center,
                     Tag = emoji
                 };
                 button.Click += EmojiButton_Click;
