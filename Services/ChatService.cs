@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -18,16 +19,18 @@ namespace NexChat.Services
         private Dictionary<string, WebServerService> _webServers = new Dictionary<string, WebServerService>();
         private CloudflaredService _cloudflaredService;
         private ChatConnectorService _chatConnectorService;
+        private CommunityChatService _communityChatService;
         
         // WebSocket connections para chats remotos
         private Dictionary<string, ChatWebSocketService> _webSocketConnections = new Dictionary<string, ChatWebSocketService>();
 
         private bool _disposed = false;
 
-        public ChatService(CloudflaredService cloudflaredService, ChatConnectorService chatConnectorService) 
+        public ChatService(CloudflaredService cloudflaredService, ChatConnectorService chatConnectorService, CommunityChatService communityChatService) 
         {
             _cloudflaredService = cloudflaredService;
             _chatConnectorService = chatConnectorService;
+            _communityChatService = communityChatService;
             LoadChats();
         }
 
@@ -275,10 +278,11 @@ namespace NexChat.Services
             }
         }
 
-        public void CreateChat(string Name, bool PublishChatPublicList)
+        public async Task CreateChatAsync(string Name, bool PublishChatPublicList)
         {
             Chat chat = new Chat(Name);
             chat.IsInvited = false;
+            chat.CommunityChat = true;
             chats.Add(chat);
             SaveChats();
         }
@@ -537,6 +541,7 @@ namespace NexChat.Services
             chat.IsRunning = true;
             chat.ServerPort = webServer.Port;
             chat.CodeInvitation = $"{GetSubdomain(webServer.TunnelUrl)}";
+            CreateCommunityChat(chat);
             SaveChats();
             
             Console.WriteLine($"Web server started for chat '{chat.Name}' on port {webServer.Port}");
@@ -551,6 +556,33 @@ namespace NexChat.Services
             return true;
         }
 
+        private async void CreateCommunityChat(Chat chat)
+        {
+            if (chat.CommunityChat is null) return;
+            // Si se debe publicar en la lista pública, registrar en CommunityChatService
+            if (chat.CommunityChat.Value && !string.IsNullOrEmpty(chat.CodeInvitation))
+            {
+                try
+                {
+                    CreatedCommunity communityChat = await _communityChatService.CreateCommunityChatAsync(
+                        name: chat.Name,
+                        description: $"Chat público: {chat.Name}",
+                        codeInvitation: chat.CodeInvitation
+                    );
+
+                    if (communityChat.Success)
+                    {
+                        chat.CommunityChatSecret = communityChat.SecretCode;
+                    }
+
+                    Console.WriteLine($"Chat '{chat.Name}' registrado en la lista pública de comunidad");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error al registrar chat en lista pública: {ex.Message}");
+                }
+            }
+        }
         private bool WebServer_CreateMessage(string chatId, Message message)
         {
             try
@@ -616,6 +648,25 @@ namespace NexChat.Services
             
             Console.WriteLine($"Web server stopped for chat '{chat.Name}'");
             return true;
+        }
+
+        public async void DeleteCommunityChat(Chat chat)
+        {
+            if (chat.CommunityChat is null) return;
+            // Si el chat estaba en la lista pública, eliminarlo
+            if (chat.CommunityChat.Value && !string.IsNullOrEmpty(chat.CodeInvitation))
+            {
+                try
+                {
+                    if (chat.CommunityChatSecret is null) return;
+                    await _communityChatService.DeleteCommunityChatAsync(chat.CommunityChatSecret);
+                    Console.WriteLine($"Chat '{chat.Name}' eliminado de la lista pública de comunidad");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error al eliminar chat de lista pública: {ex.Message}");
+                }
+            }
         }
 
         public async Task<bool> OpenTunnel(string chatId)

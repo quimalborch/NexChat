@@ -36,6 +36,7 @@ namespace NexChat
         private CloudflaredService _cloudflaredService;
         private ChatConnectorService _chatConnectorService;
         private ConfigurationService _configurationService;
+        private CommunityChatService _communityChatService;
         public ObservableCollection<Chat> ChatItems { get; set; }
         private Chat _selectedChat;
         private string _currentUserId;
@@ -53,6 +54,7 @@ namespace NexChat
             _configurationService = new ConfigurationService();
             _chatConnectorService = new ChatConnectorService();
             _cloudflaredService = new CloudflaredService();
+            _communityChatService = new CommunityChatService(_configurationService);
             _chatService = CreateChatService();
             _updateManager = CreateUpdateManager();
             _updateManagerResponse = new returnMessageUpdateInfo(false);
@@ -393,7 +395,7 @@ namespace NexChat
 
         private ChatService CreateChatService()
         {
-            return new ChatService(_cloudflaredService, _chatConnectorService);
+            return new ChatService(_cloudflaredService, _chatConnectorService, _communityChatService);
         }
 
         private async void MainWindow_Activated(object sender, WindowActivatedEventArgs e)
@@ -1147,7 +1149,7 @@ namespace NexChat
                 if (string.IsNullOrWhiteSpace(textBox.Text))
                 {
                     errorText.Visibility = Visibility.Visible;
-                    args.Cancel = true; // evita que se cierre el diálogo
+                    args.Cancel = true;
                 }
                 else
                 {
@@ -1160,8 +1162,7 @@ namespace NexChat
             {
                 string userInput = textBox.Text;
                 bool publishChatPublic = checkBox.IsChecked == true;
-                // aquí puedes usar la variable userInput
-                _chatService.CreateChat(userInput, publishChatPublic);
+                await _chatService.CreateChatAsync(userInput, publishChatPublic);
             }
         }
 

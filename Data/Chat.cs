@@ -18,7 +18,10 @@ namespace NexChat.Data
 
         public string Id { get; set; } = Guid.NewGuid().ToString();
         public string Name { get; set; }
-        
+        public bool? CommunityChat { get; set; }
+        public string? CommunityChatSecret { get; set; }
+
+
         public string? CodeInvitation 
         { 
             get => _codeInvitation;
