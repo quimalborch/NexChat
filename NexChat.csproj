@@ -25,8 +25,8 @@
     <None Remove="Themes\GreenTheme.xaml" />
     <None Remove="Themes\PurpleTheme.xaml" />
     <None Remove="Themes\RedTheme.xaml" />
+    <None Remove="Controls\EmojiPicker.xaml" />
   </ItemGroup>
-
   <ItemGroup>
     <Content Include="Assets\SplashScreen.scale-200.png" />
     <Content Include="Assets\LockScreenLogo.scale-200.png" />
@@ -57,6 +57,9 @@
     <PackageReference Include="Velopack" Version="0.0.1298" />
   </ItemGroup>
   <ItemGroup>
+    <Page Update="Controls\EmojiPicker.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
     <Page Update="ConfigWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
     </Page>

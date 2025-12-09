@@ -269,12 +269,39 @@
                       BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" 
                       BorderThickness="0,1,0,0">
                     <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
+                    <!-- Emoji Button -->
+                    <Button x:Name="EmojiButton" 
+                            Grid.Column="0"
+                            Width="44"
+                            Height="44"
+                            Padding="0"
+                            Margin="0,0,8,0"
+                            VerticalAlignment="Center"
+                            HorizontalContentAlignment="Center"
+                            CornerRadius="22"
+                            Background="Transparent"
+                            BorderThickness="0">
+                        <FontIcon Glyph="&#xE76E;" FontSize="22"/>
+                        <Button.Flyout>
+                            <Flyout x:Name="EmojiPickerFlyout" Placement="Top">
+                                <Flyout.FlyoutPresenterStyle>
+                                    <Style TargetType="FlyoutPresenter">
+                                        <Setter Property="Padding" Value="0"/>
+                                        <Setter Property="BorderThickness" Value="0"/>
+                                        <Setter Property="CornerRadius" Value="8"/>
+                                    </Style>
+                                </Flyout.FlyoutPresenterStyle>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+
                     <TextBox x:Name="MessageInputBox" 
-                             Grid.Column="0"
+                             Grid.Column="1"
                              PlaceholderText="Escribe un mensaje..."
                              VerticalAlignment="Center"
                              Height="40"
@@ -283,7 +310,7 @@
                              CornerRadius="20"/>
 
                     <Button x:Name="SendButton" 
-                            Grid.Column="1"
+                            Grid.Column="2"
                             Content="Enviar"
                             Click="SendButton_Click"
                             Height="40"
