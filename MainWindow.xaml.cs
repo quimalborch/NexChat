@@ -1109,23 +1109,59 @@ namespace NexChat
 
         private async void BtnCrearNuevoChat_Click(object sender, RoutedEventArgs e)
         {
-            //pedir a usuario input de string para nombre
-            var textBox = new TextBox();
+            var textBox = new TextBox
+            {
+                PlaceholderText = "Nombre del chat"
+            };
+
+            var checkBox = new CheckBox
+            {
+                Content = "Publicar el chat en la lista publica oficial de NexChat.",
+                Margin = new Thickness(0, 10, 0, 0)
+            };
+
+            var errorText = new TextBlock
+            {
+                Text = "El nombre no puede estar vacío",
+                Foreground = new SolidColorBrush(Colors.Red),
+                Visibility = Visibility.Collapsed,
+                Margin = new Thickness(0, 8, 0, 0)
+            };
+
+            var panel = new StackPanel();
+            panel.Children.Add(textBox);
+            panel.Children.Add(checkBox);
+            panel.Children.Add(errorText);
+
             var dialog = new ContentDialog
             {
-                Title = "Introduce tu nombre",
-                Content = textBox,
+                Title = "Crear nuevo chat",
+                Content = panel,
                 PrimaryButtonText = "Aceptar",
                 CloseButtonText = "Cancelar",
                 XamlRoot = this.Content.XamlRoot
+            };
+
+            dialog.PrimaryButtonClick += (s, args) =>
+            {
+                if (string.IsNullOrWhiteSpace(textBox.Text))
+                {
+                    errorText.Visibility = Visibility.Visible;
+                    args.Cancel = true; // evita que se cierre el diálogo
+                }
+                else
+                {
+                    errorText.Visibility = Visibility.Collapsed;
+                }
             };
 
             var result = await dialog.ShowAsync();
             if (result == ContentDialogResult.Primary)
             {
                 string userInput = textBox.Text;
+                bool publishChatPublic = checkBox.IsChecked == true;
                 // aquí puedes usar la variable userInput
-                _chatService.CreateChat(userInput);
+                _chatService.CreateChat(userInput, publishChatPublic);
             }
         }
 

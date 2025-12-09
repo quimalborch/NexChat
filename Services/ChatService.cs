@@ -275,7 +275,7 @@ namespace NexChat.Services
             }
         }
 
-        public void CreateChat(string Name)
+        public void CreateChat(string Name, bool PublishChatPublicList)
         {
             Chat chat = new Chat(Name);
             chat.IsInvited = false;
