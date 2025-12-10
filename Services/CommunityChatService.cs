@@ -2,6 +2,10 @@ using NexChat.Data;
 using Serilog;
 using System;
 using System.Collections.Generic;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace NexChat.Services
@@ -20,21 +24,51 @@ namespace NexChat.Services
     {
         private readonly ConfigurationService _configurationService;
 
+        private string _urlApi = "http://localhost:3000/api/chats";
+
         public CommunityChatService(ConfigurationService configurationService)
         {
             _configurationService = configurationService;
         }
 
-        public async Task<CreatedCommunity> CreateCommunityChatAsync(string name, string description, string codeInvitation)
+        public async Task<CreatedCommunity> CreateCommunityChatAsync(string name, string codeInvitation)
         {
-            // TODO: Implement API call to NexChat community server to register the chat
-            throw new NotImplementedException("API integration pending");
+            var client = new HttpClient();
+            var request = new HttpRequestMessage(HttpMethod.Post, _urlApi);
+            var body = new
+            {
+                name = name,
+                url = codeInvitation
+            };
+            var json = JsonSerializer.Serialize(body);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            request.Content = content;
+            var response = await client.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            var responseContent = await response.Content.ReadAsStringAsync();
+            var apiResponse = JsonSerializer.Deserialize<JsonElement>(responseContent);
+
+            var newCC = new CreatedCommunity
+            {
+                Success = true,
+                SecretCode = apiResponse.GetProperty("secret_key").GetString()
+            };
+
+            return newCC;
         }
 
         public async Task<bool> DeleteCommunityChatAsync(string secretCommunity)
         {
-            // TODO: Implement API call to NexChat community server to remove the chat from public list
-            throw new NotImplementedException("API integration pending");
+            var client = new HttpClient();
+            var request = new HttpRequestMessage(HttpMethod.Delete, $"{_urlApi}?secret_key={secretCommunity}");
+            var content = new StringContent(string.Empty);
+            content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+            request.Content = content;
+            var response = await client.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            await response.Content.ReadAsStringAsync();
+
+            return true;
         }
 
         public async Task<List<CommunityChat>> GetCommunityChatsAsync()

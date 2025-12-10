@@ -14,10 +14,9 @@ namespace NexChat.Services
         /// Creates a new community chat and publishes it to the public list
         /// </summary>
         /// <param name="name">Name of the community chat</param>
-        /// <param name="description">Description of the community chat</param>
         /// <param name="codeInvitation">Invitation code for the chat</param>
         /// <returns>The created CommunityChat or null if creation failed</returns>
-        Task<CreatedCommunity> CreateCommunityChatAsync(string name, string description, string codeInvitation);
+        Task<CreatedCommunity> CreateCommunityChatAsync(string name, string codeInvitation);
 
         /// <summary>
         /// Deletes a community chat from the public list

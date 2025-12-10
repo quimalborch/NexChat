@@ -566,7 +566,6 @@ namespace NexChat.Services
                 {
                     CreatedCommunity communityChat = await _communityChatService.CreateCommunityChatAsync(
                         name: chat.Name,
-                        description: $"Chat público: {chat.Name}",
                         codeInvitation: chat.CodeInvitation
                     );
 
@@ -642,6 +641,7 @@ namespace NexChat.Services
             }
             
             chat.IsRunning = false;
+            DeleteCommunityChat(chat);
             chat.CodeInvitation = null;
             chat.ServerPort = null;
             SaveChats();
