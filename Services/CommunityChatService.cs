@@ -83,10 +83,24 @@ namespace NexChat.Services
             throw new NotImplementedException("API integration pending");
         }
 
-        public async Task<bool> UpdateCommunityChatAsync(string communityChatId, string? name = null, string? description = null)
+        public async Task<bool> UpdateCommunityChatAsync(string communityChatId, string? name = null)
         {
-            // TODO: Implement API call to update community chat on NexChat community server
-            throw new NotImplementedException("API integration pending");
+            var client = new HttpClient();
+            var request = new HttpRequestMessage(HttpMethod.Put, _urlApi);
+            var body = new
+            {
+                name = name,
+                secret_key = communityChatId
+            };
+            var json = JsonSerializer.Serialize(body);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            request.Content = content;
+            var response = await client.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            await response.Content.ReadAsStringAsync();
+            
+            return true;
+
         }
 
         public async Task<List<CommunityChat>> SearchCommunityChatsAsync(string name)

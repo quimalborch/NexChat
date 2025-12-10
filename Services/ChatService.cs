@@ -338,6 +338,7 @@ namespace NexChat.Services
             Chat? chat = chats.FirstOrDefault(c => c.Id == chatId);
             if (chat is null) return;
             chat.Name = newName;
+            EditCommunityChat(chat);
             SaveChats();
         }
 
@@ -554,6 +555,25 @@ namespace NexChat.Services
             }
             
             return true;
+        }
+
+        public async void EditCommunityChat(Chat chat)
+        {
+            if (chat.CommunityChat is null) return;
+            // Si el chat estaba en la lista pública, editarlo
+            if (chat.CommunityChat.Value && !string.IsNullOrEmpty(chat.CodeInvitation))
+            {
+                try
+                {
+                    if (chat.CommunityChatSecret is null) return;
+                    await _communityChatService.UpdateCommunityChatAsync(chat.CommunityChatSecret, chat.Name);
+                    Console.WriteLine($"Chat '{chat.Name}' actualizado");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error al eliminar chat de lista pública: {ex.Message}");
+                }
+            }
         }
 
         private async void CreateCommunityChat(Chat chat)

@@ -45,7 +45,7 @@ namespace NexChat.Services
         /// <param name="name">New name (optional)</param>
         /// <param name="description">New description (optional)</param>
         /// <returns>True if update was successful, false otherwise</returns>
-        Task<bool> UpdateCommunityChatAsync(string communityChatId, string? name = null, string? description = null);
+        Task<bool> UpdateCommunityChatAsync(string communityChatId, string? name = null);
 
         /// <summary>
         /// Searches for community chats by name or description
