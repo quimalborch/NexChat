@@ -46,6 +46,8 @@ namespace NexChat
 
         private bool _isInitialized = false;
 
+        private List<CommunityChat> _publicCC = new List<CommunityChat>();
+
         public MainWindow()
         {
             InitializeComponent();
@@ -1423,6 +1425,142 @@ namespace NexChat
             ventanaConfig.Title = "Configuración";
             ventanaConfig.Activate();
             this.AppWindow.Hide();
+        }
+
+        private async void BtnExplorarChats_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                _publicCC = await _chatService.GetCommunityChatsAsync();
+
+                // Crear ScrollViewer para contener la lista
+                var scrollViewer = new ScrollViewer
+                {
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    Height = 400
+                };
+
+                // Crear StackPanel para los items
+                var itemsPanel = new StackPanel
+                {
+                    Spacing = 8,
+                    Padding = new Thickness(12)
+                };
+
+                // Llenar el panel con los chats
+                foreach (var chat in _publicCC)
+                {
+                    var itemGrid = new Grid
+                    {
+                        DataContext = chat,
+                        Padding = new Thickness(12, 8, 12, 8),
+                        BorderThickness = new Thickness(0, 0, 0, 1)
+                    };
+
+                    var itemBorder = new Border
+                    {
+                        BorderBrush = (Brush)Application.Current.Resources["DividerStrokeColorDefaultBrush"],
+                        BorderThickness = new Thickness(0, 0, 0, 1),
+                        Padding = new Thickness(0, 0, 0, 8)
+                    };
+
+                    var itemStack = new StackPanel
+                    {
+                        Orientation = Orientation.Vertical,
+                        Spacing = 4
+                    };
+
+                    var nameBlock = new TextBlock
+                    {
+                        Text = chat.Name,
+                        FontSize = 14,
+                        FontWeight = new Windows.UI.Text.FontWeight { Weight = 600 }
+                    };
+
+                    var codeBlock = new TextBlock
+                    {
+                        Text = chat.CodeInvitation,
+                        FontSize = 12,
+                        Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                        TextWrapping = TextWrapping.Wrap
+                    };
+
+                    itemStack.Children.Add(nameBlock);
+                    itemStack.Children.Add(codeBlock);
+                    itemBorder.Child = itemStack;
+                    itemGrid.Children.Add(itemBorder);
+                    itemsPanel.Children.Add(itemGrid);
+                }
+
+                scrollViewer.Content = itemsPanel;
+
+                // Crear diálogo
+                var dialog = new ContentDialog
+                {
+                    Title = "Explorar Chats Públicos",
+                    Content = scrollViewer,
+                    PrimaryButtonText = "Unirse",
+                    CloseButtonText = "Cancelar",
+                    XamlRoot = this.Content.XamlRoot,
+                    DefaultButton = ContentDialogButton.Primary
+                };
+
+                // Controlar la selección con Tag
+                CommunityChat selectedChat = null;
+
+                dialog.PrimaryButtonClick += async (s, args) =>
+                {
+                    if (selectedChat != null)
+                    {
+                        args.Cancel = false;
+                        await _chatService.JoinChat(selectedChat.CodeInvitation);
+                    }
+                    else
+                    {
+                        args.Cancel = true;
+                    }
+                };
+
+                // Agregar handlers de click a cada item
+                int index = 0;
+                foreach (var child in itemsPanel.Children)
+                {
+                    if (child is Grid grid)
+                    {
+                        int currentIndex = index;
+                        grid.PointerPressed += (s, args) =>
+                        {
+                            selectedChat = _publicCC[currentIndex];
+
+                            // Remover highlight anterior
+                            foreach (var item in itemsPanel.Children.OfType<Grid>())
+                            {
+                                item.Background = null;
+                            }
+
+                            // Agregar highlight al item seleccionado
+                            grid.Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"];
+                        };
+                        index++;
+                    }
+                }
+
+                // Mostrar diálogo
+                var result = await dialog.ShowAsync();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Error al explorar chats públicos");
+
+                var errorDialog = new ContentDialog
+                {
+                    Title = "Error",
+                    Content = $"No se pudieron cargar los chats públicos: {ex.Message}",
+                    CloseButtonText = "Aceptar",
+                    XamlRoot = this.Content.XamlRoot
+                };
+                await errorDialog.ShowAsync();
+            }
         }
     }
 }

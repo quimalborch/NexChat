@@ -795,5 +795,10 @@ namespace NexChat.Services
 
             _disposed = true;
         }
+
+        public async Task<List<CommunityChat>> GetCommunityChatsAsync()
+        {
+            return await _communityChatService.GetCommunityChatsAsync();
+        }
     }
 }

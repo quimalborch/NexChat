@@ -2,6 +2,7 @@ using NexChat.Data;
 using Serilog;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -25,6 +26,8 @@ namespace NexChat.Services
         private readonly ConfigurationService _configurationService;
 
         private string _urlApi = "http://localhost:3000/api/chats";
+
+        private List<CommunityChat> _publicCC = new List<CommunityChat>();
 
         public CommunityChatService(ConfigurationService configurationService)
         {
@@ -73,8 +76,40 @@ namespace NexChat.Services
 
         public async Task<List<CommunityChat>> GetCommunityChatsAsync()
         {
-            // TODO: Implement API call to fetch community chats from NexChat community server
-            throw new NotImplementedException("API integration pending");
+            var client = new HttpClient();
+            var request = new HttpRequestMessage(HttpMethod.Get, $"{_urlApi}?page=1&pageSize=5");
+            var content = new StringContent(string.Empty);
+            content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+            request.Content = content;
+            var response = await client.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            var responseContent = await response.Content.ReadAsStringAsync();
+            var apiResponse = JsonSerializer.Deserialize<JsonElement>(responseContent);
+            Console.WriteLine(_publicCC);
+
+            if (apiResponse.TryGetProperty("data", out var dataArray))
+            {
+                foreach (var item in dataArray.EnumerateArray())
+                {
+                    var name = item.GetProperty("name").GetString() ?? string.Empty;
+                    //var description = item.GetProperty("description").GetString() ?? string.Empty;
+                    var url = item.GetProperty("url").GetString() ?? string.Empty;
+                    var id = item.GetProperty("id").ToString();
+
+                    if (string.IsNullOrEmpty(id)) continue;
+
+                    if (_publicCC.Any(cc => cc.Id == id)) continue;
+
+                    CommunityChat communityChat = new CommunityChat(name, url)
+                    {
+                        Id = id
+                    };
+
+                    _publicCC.Add(communityChat);
+                }
+            }
+
+            return _publicCC;
         }
 
         public async Task<CommunityChat?> GetCommunityChatByIdAsync(string communityChatId)
@@ -83,14 +118,14 @@ namespace NexChat.Services
             throw new NotImplementedException("API integration pending");
         }
 
-        public async Task<bool> UpdateCommunityChatAsync(string communityChatId, string? name = null)
+        public async Task<bool> UpdateCommunityChatAsync(string secretCommunity, string? name = null)
         {
             var client = new HttpClient();
             var request = new HttpRequestMessage(HttpMethod.Put, _urlApi);
             var body = new
             {
                 name = name,
-                secret_key = communityChatId
+                secret_key = secretCommunity
             };
             var json = JsonSerializer.Serialize(body);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
