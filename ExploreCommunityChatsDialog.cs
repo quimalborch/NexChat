@@ -1,4 +1,4 @@
-using Microsoft.UI.Xaml;
+﻿using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using NexChat.Data;
@@ -19,6 +19,12 @@ namespace NexChat
         private CommunityChat _selectedChat;
         private StackPanel _chatsPanel;
         private Button _joinButton;
+        private int _currentPage = 1;
+        private int _pageSize = 10;
+        private PaginationInfo _paginationInfo;
+        private Button _prevPageButton;
+        private Button _nextPageButton;
+        private TextBlock _pageInfoText;
 
         public ExploreCommunityChatsDialog(ChatService chatService, XamlRoot xamlRoot)
         {
@@ -35,7 +41,7 @@ namespace NexChat
                 
                 var dialog = new ContentDialog
                 {
-                    Title = "Explorar Chats P�blicos",
+                    Title = "Explorar Chats Públicos",
                     Content = content,
                     PrimaryButtonText = "Unirse",
                     CloseButtonText = "Cancelar",
@@ -112,17 +118,62 @@ namespace NexChat
 
             mainStack.Children.Add(descriptionText);
             mainStack.Children.Add(_chatsPanel);
+            
+            // Agregar controles de paginación
+            var paginationPanel = BuildPaginationPanel();
+            mainStack.Children.Add(paginationPanel);
 
             scrollViewer.Content = mainStack;
 
             return scrollViewer;
         }
 
+        private StackPanel BuildPaginationPanel()
+        {
+            var paginationPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Spacing = 12,
+                Margin = new Thickness(0, 12, 0, 0)
+            };
+
+            _prevPageButton = new Button
+            {
+                Content = "◀ Anterior",
+                IsEnabled = false
+            };
+            _prevPageButton.Click += async (s, e) => await NavigatePage(-1);
+
+            _pageInfoText = new TextBlock
+            {
+                Text = "Página 1 de 1",
+                VerticalAlignment = VerticalAlignment.Center,
+                MinWidth = 100,
+                TextAlignment = TextAlignment.Center
+            };
+
+            _nextPageButton = new Button
+            {
+                Content = "Siguiente ▶",
+                IsEnabled = false
+            };
+            _nextPageButton.Click += async (s, e) => await NavigatePage(1);
+
+            paginationPanel.Children.Add(_prevPageButton);
+            paginationPanel.Children.Add(_pageInfoText);
+            paginationPanel.Children.Add(_nextPageButton);
+
+            return paginationPanel;
+        }
+
         private async Task LoadCommunityChatsAsync()
         {
             try
             {
-                _communityChats = await _chatService.GetCommunityChatsAsync();
+                var response = await _chatService.GetCommunityChatsAsync(_currentPage, _pageSize);
+                _communityChats = response.Data;
+                _paginationInfo = response.Pagination;
 
                 // Actualizar UI en el hilo principal
                 if (_chatsPanel.DispatcherQueue != null)
@@ -130,6 +181,7 @@ namespace NexChat
                     _chatsPanel.DispatcherQueue.TryEnqueue(() =>
                     {
                         BuildChatsList();
+                        UpdatePaginationControls();
                     });
                 }
             }
@@ -145,6 +197,44 @@ namespace NexChat
                     });
                 }
             }
+        }
+
+        private async Task NavigatePage(int direction)
+        {
+            int newPage = _currentPage + direction;
+            
+            if (newPage < 1 || (_paginationInfo != null && newPage > _paginationInfo.TotalPages))
+                return;
+
+            _currentPage = newPage;
+            
+            // Mostrar indicador de carga
+            _chatsPanel.Children.Clear();
+            var loadingRing = new ProgressRing
+            {
+                IsActive = true,
+                Width = 48,
+                Height = 48,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 24, 0, 24)
+            };
+            _chatsPanel.Children.Add(loadingRing);
+            
+            // Deshabilitar botones durante la carga
+            _prevPageButton.IsEnabled = false;
+            _nextPageButton.IsEnabled = false;
+            
+            await LoadCommunityChatsAsync();
+        }
+
+        private void UpdatePaginationControls()
+        {
+            if (_paginationInfo == null)
+                return;
+
+            _prevPageButton.IsEnabled = _paginationInfo.HasPrevPage;
+            _nextPageButton.IsEnabled = _paginationInfo.HasNextPage;
+            _pageInfoText.Text = $"Página {_paginationInfo.Page} de {_paginationInfo.TotalPages} ({_paginationInfo.Total} total)";
         }
 
         private void ShowError(string message)
@@ -171,7 +261,7 @@ namespace NexChat
             {
                 var emptyTextBlock = new TextBlock
                 {
-                    Text = "No hay chats p�blicos disponibles en este momento.",
+                    Text = "No hay chats públicos disponibles en este momento.",
                     Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
                     TextWrapping = TextWrapping.Wrap,
                     HorizontalAlignment = HorizontalAlignment.Center,
@@ -207,7 +297,7 @@ namespace NexChat
 
                 var codeBlock = new TextBlock
                 {
-                    Text = $"C�digo: {chat.CodeInvitation}",
+                    Text = $"Código: {chat.CodeInvitation}",
                     FontSize = 13,
                     Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
                 };

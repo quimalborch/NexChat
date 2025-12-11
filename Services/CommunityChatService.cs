@@ -19,6 +19,22 @@ namespace NexChat.Services
         public string? ErrorMessage { get; set; }
     }
 
+    public class PaginationInfo
+    {
+        public int Page { get; set; }
+        public int PageSize { get; set; }
+        public int Total { get; set; }
+        public int TotalPages { get; set; }
+        public bool HasNextPage { get; set; }
+        public bool HasPrevPage { get; set; }
+    }
+
+    public class CommunityChatsResponse
+    {
+        public List<CommunityChat> Data { get; set; } = new List<CommunityChat>();
+        public PaginationInfo Pagination { get; set; } = new PaginationInfo();
+    }
+
     /// <summary>
     /// Service for managing NexChatCC (Community Chats)
     /// Handles public community chats that can be discovered and joined by any user
@@ -27,7 +43,7 @@ namespace NexChat.Services
     {
         private readonly ConfigurationService _configurationService;
 
-        private string _urlApi = "http://localhost:3000";
+        private string _urlApi = "https://nexchatcc.quimalborch.com";
 
         private List<CommunityChat> _publicCC = new List<CommunityChat>();
 
@@ -99,43 +115,63 @@ namespace NexChat.Services
             return true;
         }
 
-        public async Task<List<CommunityChat>> GetCommunityChatsAsync()
+        public async Task<CommunityChatsResponse> GetCommunityChatsAsync(int page = 1, int pageSize = 10)
         {
-            var client = new HttpClient();
-            var request = new HttpRequestMessage(HttpMethod.Get, $"{_urlApi}/api/chats?page=1&pageSize=5");
-            var content = new StringContent(string.Empty);
-            content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-            request.Content = content;
-            var response = await client.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-            var responseContent = await response.Content.ReadAsStringAsync();
-            var apiResponse = JsonSerializer.Deserialize<JsonElement>(responseContent);
-            Console.WriteLine(_publicCC);
-
-            _publicCC.Clear();
-            if (apiResponse.TryGetProperty("data", out var dataArray))
+            try
             {
-                foreach (var item in dataArray.EnumerateArray())
+                var client = new HttpClient();
+                var request = new HttpRequestMessage(HttpMethod.Get, $"{_urlApi}/api/chats?page={page}&pageSize={pageSize}");
+                var content = new StringContent(string.Empty);
+                content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+                request.Content = content;
+                var response = await client.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+                var responseContent = await response.Content.ReadAsStringAsync();
+                var apiResponse = JsonSerializer.Deserialize<JsonElement>(responseContent);
+
+                var result = new CommunityChatsResponse();
+                var chatsForPage = new List<CommunityChat>();
+
+                if (apiResponse.TryGetProperty("data", out var dataArray))
                 {
-                    var name = item.GetProperty("name").GetString() ?? string.Empty;
-                    //var description = item.GetProperty("description").GetString() ?? string.Empty;
-                    var url = item.GetProperty("url").GetString() ?? string.Empty;
-                    var id = item.GetProperty("id").ToString();
-
-                    if (string.IsNullOrEmpty(id)) continue;
-
-                    if (_publicCC.Any(cc => cc.Id == id)) continue;
-
-                    CommunityChat communityChat = new CommunityChat(name, url)
+                    foreach (var item in dataArray.EnumerateArray())
                     {
-                        Id = id
-                    };
+                        var name = item.GetProperty("name").GetString() ?? string.Empty;
+                        var url = item.GetProperty("url").GetString() ?? string.Empty;
+                        var id = item.GetProperty("id").ToString();
 
-                    _publicCC.Add(communityChat);
+                        if (string.IsNullOrEmpty(id)) continue;
+
+                        CommunityChat communityChat = new CommunityChat(name, url)
+                        {
+                            Id = id
+                        };
+
+                        chatsForPage.Add(communityChat);
+                    }
                 }
-            }
 
-            return _publicCC;
+                if (apiResponse.TryGetProperty("pagination", out var paginationObj))
+                {
+                    result.Pagination = new PaginationInfo
+                    {
+                        Page = paginationObj.GetProperty("page").GetInt32(),
+                        PageSize = paginationObj.GetProperty("pageSize").GetInt32(),
+                        Total = paginationObj.GetProperty("total").GetInt32(),
+                        TotalPages = paginationObj.GetProperty("totalPages").GetInt32(),
+                        HasNextPage = paginationObj.GetProperty("hasNextPage").GetBoolean(),
+                        HasPrevPage = paginationObj.GetProperty("hasPrevPage").GetBoolean()
+                    };
+                }
+
+                result.Data = chatsForPage;
+                return result;
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Error getting community chats");
+                return new CommunityChatsResponse();
+            }
         }
 
         public async Task<CommunityChat?> GetCommunityChatByIdAsync(string communityChatId)

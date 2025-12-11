@@ -796,9 +796,9 @@ namespace NexChat.Services
             _disposed = true;
         }
 
-        public async Task<List<CommunityChat>> GetCommunityChatsAsync()
+        public async Task<CommunityChatsResponse> GetCommunityChatsAsync(int page = 1, int pageSize = 10)
         {
-            return await _communityChatService.GetCommunityChatsAsync();
+            return await _communityChatService.GetCommunityChatsAsync(page, pageSize);
         }
     }
 }
