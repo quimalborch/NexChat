@@ -7,6 +7,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace NexChat.Services
@@ -15,6 +16,7 @@ namespace NexChat.Services
     {
         public bool Success { get; set; } = false;
         public string? SecretCode { get; set; }
+        public string? ErrorMessage { get; set; }
     }
 
     /// <summary>
@@ -25,7 +27,7 @@ namespace NexChat.Services
     {
         private readonly ConfigurationService _configurationService;
 
-        private string _urlApi = "http://localhost:3000/api/chats";
+        private string _urlApi = "http://localhost:3000";
 
         private List<CommunityChat> _publicCC = new List<CommunityChat>();
 
@@ -36,34 +38,57 @@ namespace NexChat.Services
 
         public async Task<CreatedCommunity> CreateCommunityChatAsync(string name, string codeInvitation)
         {
-            var client = new HttpClient();
-            var request = new HttpRequestMessage(HttpMethod.Post, _urlApi);
-            var body = new
+            try
             {
-                name = name,
-                url = codeInvitation
-            };
-            var json = JsonSerializer.Serialize(body);
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
-            request.Content = content;
-            var response = await client.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-            var responseContent = await response.Content.ReadAsStringAsync();
-            var apiResponse = JsonSerializer.Deserialize<JsonElement>(responseContent);
+                Thread.Sleep(5000);
 
-            var newCC = new CreatedCommunity
+                var client = new HttpClient();
+                var request = new HttpRequestMessage(HttpMethod.Post, $"{_urlApi}/api/chats");
+                var body = new
+                {
+                    name = name,
+                    url = codeInvitation
+                };
+                var json = JsonSerializer.Serialize(body);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+                request.Content = content;
+
+                var response = await client.SendAsync(request);
+
+                // Capturamos el body si hay error
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Log.Error("HTTP Request Error while creating community chat. Status: {StatusCode}, Body: {Body}", response.StatusCode, errorContent);
+                    return new CreatedCommunity { Success = false, ErrorMessage = $"API Error: {errorContent}" };
+                }
+
+                var responseContent = await response.Content.ReadAsStringAsync();
+                var apiResponse = JsonSerializer.Deserialize<JsonElement>(responseContent);
+
+                var newCC = new CreatedCommunity
+                {
+                    Success = true,
+                    SecretCode = apiResponse.GetProperty("secret_key").GetString()
+                };
+
+                return newCC;
+            }
+            catch (HttpRequestException httpEx)
             {
-                Success = true,
-                SecretCode = apiResponse.GetProperty("secret_key").GetString()
-            };
-
-            return newCC;
+                Log.Error("HTTP Request Exception: {Message}", httpEx.Message);
+                return new CreatedCommunity { Success = false, ErrorMessage = "HTTP Request Error: " + httpEx.Message };
+            }
+            catch (Exception ex)
+            {
+                return new CreatedCommunity { Success = false, ErrorMessage = ex.Message };
+            }
         }
 
         public async Task<bool> DeleteCommunityChatAsync(string secretCommunity)
         {
             var client = new HttpClient();
-            var request = new HttpRequestMessage(HttpMethod.Delete, $"{_urlApi}?secret_key={secretCommunity}");
+            var request = new HttpRequestMessage(HttpMethod.Delete, $"{_urlApi}/api/chats?secret_key={secretCommunity}");
             var content = new StringContent(string.Empty);
             content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
             request.Content = content;
@@ -77,7 +102,7 @@ namespace NexChat.Services
         public async Task<List<CommunityChat>> GetCommunityChatsAsync()
         {
             var client = new HttpClient();
-            var request = new HttpRequestMessage(HttpMethod.Get, $"{_urlApi}?page=1&pageSize=5");
+            var request = new HttpRequestMessage(HttpMethod.Get, $"{_urlApi}/api/chats?page=1&pageSize=5");
             var content = new StringContent(string.Empty);
             content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
             request.Content = content;
@@ -87,6 +112,7 @@ namespace NexChat.Services
             var apiResponse = JsonSerializer.Deserialize<JsonElement>(responseContent);
             Console.WriteLine(_publicCC);
 
+            _publicCC.Clear();
             if (apiResponse.TryGetProperty("data", out var dataArray))
             {
                 foreach (var item in dataArray.EnumerateArray())
@@ -121,7 +147,7 @@ namespace NexChat.Services
         public async Task<bool> UpdateCommunityChatAsync(string secretCommunity, string? name = null)
         {
             var client = new HttpClient();
-            var request = new HttpRequestMessage(HttpMethod.Put, _urlApi);
+            var request = new HttpRequestMessage(HttpMethod.Put, $"{_urlApi}/api/chats");
             var body = new
             {
                 name = name,
