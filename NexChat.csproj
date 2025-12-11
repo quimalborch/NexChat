@@ -2,7 +2,7 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
-	<AssemblyVersion>1.0.9</AssemblyVersion>
+	<AssemblyVersion>1.1.0</AssemblyVersion>
 	<TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>NexChat</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>

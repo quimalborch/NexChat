@@ -1424,5 +1424,45 @@ namespace NexChat
             ventanaConfig.Activate();
             this.AppWindow.Hide();
         }
+
+        private async void BtnExplorarChats_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var exploreCommunityChatsDialog = new ExploreCommunityChatsDialog(_chatService, this.Content.XamlRoot);
+                var selectedChat = await exploreCommunityChatsDialog.ShowAsync();
+
+                // Si el usuario seleccionó un chat y presionó "Unirse"
+                if (selectedChat != null)
+                {
+                    bool joinSuccess = await _chatService.JoinChat(selectedChat.CodeInvitation);
+
+                    if (!joinSuccess)
+                    {
+                        var errorDialog = new ContentDialog
+                        {
+                            Title = "Error al unirse al chat",
+                            Content = "No se pudo unir al chat. Verifica que el código sea correcto y que el chat esté disponible.",
+                            CloseButtonText = "Aceptar",
+                            XamlRoot = this.Content.XamlRoot
+                        };
+                        await errorDialog.ShowAsync();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Error al explorar chats públicos");
+
+                var errorDialog = new ContentDialog
+                {
+                    Title = "Error",
+                    Content = $"No se pudieron cargar los chats públicos: {ex.Message}",
+                    CloseButtonText = "Aceptar",
+                    XamlRoot = this.Content.XamlRoot
+                };
+                await errorDialog.ShowAsync();
+            }
+        }
     }
 }

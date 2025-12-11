@@ -26,10 +26,12 @@ namespace NexChat.Services
         Task<bool> DeleteCommunityChatAsync(string secretCommunity);
 
         /// <summary>
-        /// Gets a list of all available community chats
+        /// Gets a paginated list of all available community chats
         /// </summary>
-        /// <returns>List of available community chats</returns>
-        Task<List<CommunityChat>> GetCommunityChatsAsync();
+        /// <param name="page">Page number (default: 1)</param>
+        /// <param name="pageSize">Number of items per page (default: 10)</param>
+        /// <returns>Community chats response with data and pagination info</returns>
+        Task<CommunityChatsResponse> GetCommunityChatsAsync(int page = 1, int pageSize = 10);
 
         /// <summary>
         /// Gets a specific community chat by ID
@@ -45,7 +47,7 @@ namespace NexChat.Services
         /// <param name="name">New name (optional)</param>
         /// <param name="description">New description (optional)</param>
         /// <returns>True if update was successful, false otherwise</returns>
-        Task<bool> UpdateCommunityChatAsync(string communityChatId, string? name = null);
+        Task<bool> UpdateCommunityChatAsync(string secretCommunity, string? name = null);
 
         /// <summary>
         /// Searches for community chats by name or description

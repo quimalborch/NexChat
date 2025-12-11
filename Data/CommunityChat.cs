@@ -69,6 +69,13 @@ namespace NexChat.Data
             IsActive = true;
         }
 
+        public CommunityChat(string name, string codeInvitation) 
+        {
+            _name = name;
+            CodeInvitation = codeInvitation;
+            IsActive = true;
+        }
+
         public CommunityChat(string name, string description, string codeInvitation, string creatorId)
         {
             _name = name;
